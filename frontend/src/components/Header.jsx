@@ -13,7 +13,7 @@ function Indicator({ state, label, value, title }) {
 
 const st = (ok) => (ok === true ? "ok" : ok === false ? "bad" : "off");
 
-export default function Header({ connected, health, lastJob, filters, onRun, onLogout }) {
+export default function Header({ connected, health, lastJob, filters, onRun }) {
   const [busy, setBusy] = useState(false);
   const ai = health?.ai_engine;
   const running = lastJob?.status === "running";
@@ -48,7 +48,6 @@ export default function Header({ connected, health, lastJob, filters, onRun, onL
         <button className="btn" disabled={busy || running} onClick={run}>{running ? "Skan trwa…" : busy ? "Zlecono…" : "Uruchom skan"}</button>
         <a className="btn ghost" href={api.exportUrl(filters, "csv")}>CSV</a>
         <a className="btn ghost" href={api.exportUrl(filters, "json")}>JSON</a>
-        <button className="btn ghost" onClick={onLogout} title="Wyloguj">Wyloguj</button>
       </div>
     </header>
   );

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import threading
 from pathlib import Path
 
 from . import config
@@ -37,7 +38,13 @@ class S3Storage:
         self.client = Minio(config.S3_ENDPOINT, access_key=config.S3_ACCESS_KEY,
                             secret_key=config.S3_SECRET_KEY, secure=config.S3_SECURE)
         if not self.client.bucket_exists(self.bucket):
-            self.client.make_bucket(self.bucket)
+            from minio.error import S3Error
+
+            try:
+                self.client.make_bucket(self.bucket)
+            except S3Error as exc:      # inny proces (api / worker) utworzył bucket w międzyczasie
+                if exc.code not in {"BucketAlreadyOwnedByYou", "BucketAlreadyExists"}:
+                    raise
 
     def put(self, key: str, data: bytes, content_type: str) -> str:
         self.client.put_object(self.bucket, key, io.BytesIO(data), len(data), content_type=content_type)
@@ -56,12 +63,15 @@ class S3Storage:
 
 
 _storage = None
+_storage_lock = threading.Lock()
 
 
 def get_storage():
     global _storage
     if _storage is None:
-        _storage = S3Storage() if config.STORAGE_BACKEND == "s3" else LocalStorage(config.STORAGE_DIR)
+        with _storage_lock:            # worker ma kilka wątków – jedna instancja klienta S3
+            if _storage is None:
+                _storage = S3Storage() if config.STORAGE_BACKEND == "s3" else LocalStorage(config.STORAGE_DIR)
     return _storage
 
 

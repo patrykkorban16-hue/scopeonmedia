@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 
-from huey import RedisHuey, SqliteHuey, crontab
+from huey import PriorityRedisHuey, SqliteHuey, crontab
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -22,7 +22,8 @@ from .scraper.http import Fetcher
 log = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 config.require_internal_token()      # worker bez sekretu nie mógłby wysyłać zdarzeń do API
-huey = (RedisHuey("investwatch", url=config.REDIS_URL) if config.QUEUE_BACKEND == "redis"
+# zwykły RedisHuey nie obsługuje priorytetów zadań (NotImplementedError przy enqueue) – wariant priorytetowy wymaga Redis 5+
+huey = (PriorityRedisHuey("investwatch", url=config.REDIS_URL) if config.QUEUE_BACKEND == "redis"
         else SqliteHuey("investwatch", filename=config.QUEUE_SQLITE))
 init_db()
 

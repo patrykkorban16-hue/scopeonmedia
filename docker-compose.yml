@@ -52,7 +52,10 @@ services:
 
   ollama:
     image: ollama/ollama:0.40.16
-    volumes: [ollama:/root/.ollama]
+    # certs/: opcjonalne dodatkowe CA (sieć z inspekcją TLS – proxy firmowe, antywirus); pusty katalog = bez zmian
+    volumes: [ollama:/root/.ollama, ./certs:/extra-ca:ro]
+    environment:
+      SSL_CERT_DIR: /etc/ssl/certs:/extra-ca
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -98,7 +101,8 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/thresholds', timeout=5)"]
       interval: 10s
       retries: 30
-    ports: ["127.0.0.1:8000:8000"]   # dokumentacja API: http://localhost:8000/docs
+    # port na hoście z .env (IW_API_PORT), domyślnie 8000; dokumentacja API: http://localhost:<port>/docs
+    ports: ["127.0.0.1:${IW_API_PORT:-8000}:8000"]
 
   worker:   # kolejka zadań + harmonogram (CronJob) – Huey na Redis
     build: ./backend
@@ -111,7 +115,12 @@ services:
   bootstrap:   # pierwszy skan danych demonstracyjnych po starcie
     build: ./backend
     environment: *backend-env
-    command: ["python", "-c", "import httpx; print(httpx.post('http://api:8000/api/jobs', json={'kind': 'all'}, timeout=30).text)"]
+    command:
+      - python
+      - -c
+      - >-
+        import httpx;
+        r = httpx.post('http://api:8000/api/jobs', json={'kind': 'all'}, timeout=30); r.raise_for_status(); print(r.text)
     depends_on:
       api: {condition: service_healthy}
       worker: {condition: service_started}

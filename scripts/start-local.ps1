@@ -11,27 +11,16 @@ $env:PYTHONIOENCODING = "utf-8"
 # sekrety z kryptograficznego generatora (nie Get-Random)
 function New-RandomBytes([int]$n) { $b = New-Object byte[] $n; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); return ,$b }
 function New-Secret { -join ((New-RandomBytes 32) | ForEach-Object { '{0:x2}' -f $_ }) }
-function New-Password { [Convert]::ToBase64String((New-RandomBytes 15)).Replace('+', '-').Replace('/', '_') }
 
 # --- .env z losowymi sekretami -------------------------------------------------------------
 $envFile = Join-Path $root ".env"
 if (-not (Test-Path $envFile)) {
     $content = Get-Content (Join-Path $root ".env.example") -Raw -Encoding utf8
     $content = $content -replace "IW_INTERNAL_TOKEN=.*", ("IW_INTERNAL_TOKEN=" + (New-Secret))
-    $content = $content -replace "IW_DASHBOARD_PASSWORD=.*", ("IW_DASHBOARD_PASSWORD=" + (New-Password))
     $content = $content -replace "POSTGRES_PASSWORD=.*", ("POSTGRES_PASSWORD=" + (New-Secret))
     $content = $content -replace "S3_SECRET_KEY=.*", ("S3_SECRET_KEY=" + (New-Secret))
     [IO.File]::WriteAllText($envFile, $content, (New-Object Text.UTF8Encoding $false))
     Write-Host "Utworzono .env z losowymi sekretami"
-}
-# starszy .env bez hasła do dashboardu – dopisz losowe
-$envText = [IO.File]::ReadAllText($envFile, [Text.Encoding]::UTF8)
-if ($envText -notmatch "(?m)^IW_DASHBOARD_PASSWORD=(?!change-me)\S{12,}") {
-    $line = "IW_DASHBOARD_PASSWORD=" + (New-Password)
-    if ($envText -match "(?m)^IW_DASHBOARD_PASSWORD=.*$") { $envText = $envText -replace "(?m)^IW_DASHBOARD_PASSWORD=.*$", $line }
-    else { $envText = $envText.TrimEnd() + "`r`n" + $line + "`r`n" }
-    [IO.File]::WriteAllText($envFile, $envText, (New-Object Text.UTF8Encoding $false))
-    Write-Host "Dopisano losowe IW_DASHBOARD_PASSWORD do .env – to hasło logowania do dashboardu"
 }
 if ($EnvOnly) { return }
 

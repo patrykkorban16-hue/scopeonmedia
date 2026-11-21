@@ -16,11 +16,11 @@ Dane demonstracyjne (`backend/iw_backend/demo`) opisują **fikcyjne** podmioty n
 ### Docker (cały stos jedną komendą)
 
 ```bash
-cp .env.example .env        # uzupełnij sekrety: IW_INTERNAL_TOKEN, IW_DASHBOARD_PASSWORD, POSTGRES_PASSWORD, S3_SECRET_KEY
+cp .env.example .env        # uzupełnij sekrety: IW_INTERNAL_TOKEN, POSTGRES_PASSWORD, S3_SECRET_KEY
 docker compose up -d --build
 ```
 
-Dashboard: http://localhost:8080 (hasło: `IW_DASHBOARD_PASSWORD` z `.env`) · API: http://localhost:8000/docs.
+Dashboard: http://localhost:8080 · API: http://localhost:8000/docs (port zmienia `IW_API_PORT` w `.env`).
 Bez ustawionych sekretów (albo z wartościami przykładowymi) serwisy celowo nie startują.
 Pierwszy start pobiera modele Gemma 4 i Qwen3-Embedding (ok. 5 GB, `docker compose logs -f ollama-init`), a potem `bootstrap` zleca skan danych demo.
 
@@ -32,7 +32,7 @@ Wymaga Pythona 3.12 i Node.js 22. Ollama jest opcjonalna: bez niej LLM jest wył
 powershell -ExecutionPolicy Bypass -File scripts\start-local.ps1          # -Reset: czysta baza
 ```
 
-Skrypt tworzy `.env` z losowymi sekretami (także hasło do dashboardu `IW_DASHBOARD_PASSWORD`), instaluje zależności
+Skrypt tworzy `.env` z losowymi sekretami, instaluje zależności
 i uruchamia: ai-engine `:8100`, API `:8000`, worker i dashboard `:5173`.
 
 ## Wymagania sprzętowe
@@ -58,7 +58,6 @@ Najważniejsze zmienne (`.env`, wzór w `.env.example`):
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
 | `IW_INTERNAL_TOKEN` | – | sekret komunikacji worker/ai-engine → API; wymagany, min. 24 znaki – bez niego serwisy nie startują |
-| `IW_DASHBOARD_PASSWORD` | – | hasło logowania do dashboardu (min. 8 znaków); sesja 12 h, 5 błędnych prób = blokada 5 min |
 | `IW_CORS_ORIGINS` | `http://localhost:5173` (Docker: `:8080`) | adresy, pod którymi zespół otwiera dashboard – inaczej nie działają alerty WebSocket |
 | `IW_TRUSTED_LOCAL_HOSTS` / `IW_MAX_PAGE_BYTES` | API demo / 5 MB | lokalne hosty dozwolone mimo ochrony SSRF; maks. rozmiar pobieranej strony |
 | `IW_LLM_MODEL` / `IW_EMBED_MODEL` | `gemma4:e2b` / `qwen3-embedding:0.6b` | modele w Ollamie (oba Apache 2.0) |

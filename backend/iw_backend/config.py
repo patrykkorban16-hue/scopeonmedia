@@ -48,16 +48,6 @@ AI_ENGINE_URL = os.getenv("IW_AI_ENGINE_URL", "http://127.0.0.1:8100")
 INTERNAL_TOKEN = os.getenv("IW_INTERNAL_TOKEN", "")
 
 
-DASHBOARD_PASSWORD = os.getenv("IW_DASHBOARD_PASSWORD", "")
-
-
-def require_dashboard_password() -> None:
-    """Fail fast: dashboard bez hasła (albo z hasłem przykładowym) nie startuje."""
-    if not DASHBOARD_PASSWORD or DASHBOARD_PASSWORD.startswith("change-me") or len(DASHBOARD_PASSWORD) < 8:
-        raise RuntimeError("IW_DASHBOARD_PASSWORD nie jest ustawione albo ma wartość przykładową/za krótką (min. 8 znaków). "
-                           "Uzupełnij .env – scripts/start-local.ps1 -EnvOnly dopisuje losowe hasło")
-
-
 def require_internal_token() -> None:
     """Fail fast: bez sekretu albo z wartością przykładową z .env.example serwis się nie uruchamia."""
     if not INTERNAL_TOKEN or INTERNAL_TOKEN.startswith("change-me") or len(INTERNAL_TOKEN) < 24:

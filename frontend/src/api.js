@@ -18,10 +18,6 @@ async function req(path, opts = {}) {
   } catch {
     throw new Error("API niedostępne – sprawdź, czy backend działa");
   }
-  if (r.status === 401 && !path.startsWith("/api/auth/")) {
-    // sesja wygasła – aplikacja wraca do ekranu logowania
-    window.dispatchEvent(new Event("iw:unauthorized"));
-  }
   if (!r.ok) {
     let detail = `${r.status}`;
     try {
@@ -47,9 +43,6 @@ export const filterParams = (f) => ({
 });
 
 export const api = {
-  me: () => req(`/api/auth/me`),
-  login: (password) => req(`/api/auth/login`, { method: "POST", body: JSON.stringify({ password }) }),
-  logout: () => req(`/api/auth/logout`, { method: "POST" }),
   findings: (f, sort) => req(`/api/findings?${qs({ ...filterParams(f), sort, limit: 300 })}`),
   finding: (id) => req(`/api/findings/${id}`),
   similar: (id) => req(`/api/findings/${id}/similar`),

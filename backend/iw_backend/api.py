@@ -14,14 +14,14 @@ from pathlib import Path
 
 import numpy as np
 import socketio
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 
-from . import __version__, ai_client, auth, config, registry
+from . import __version__, ai_client, config, registry
 from .db import (Content, CrawlJob, Document, Entity, Finding, StatusHistory, get_setting, get_thresholds, high_cut,
                  init_db, risk_level, session_scope, set_threshold, utcnow)
 from .security import csv_safe, fetch_allowed
@@ -38,7 +38,6 @@ DEMO_DIR = Path(__file__).parent / "demo"
 @asynccontextmanager
 async def lifespan(_app):
     config.require_internal_token()
-    config.require_dashboard_password()
     init_db()
     with session_scope() as s:
         empty = not s.scalar(select(func.count()).select_from(Entity))
@@ -53,16 +52,6 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_meth
                    allow_headers=["Content-Type"])
 (DEMO_DIR / "sites").mkdir(parents=True, exist_ok=True)
 app.mount("/demo/sites", StaticFiles(directory=DEMO_DIR / "sites", html=True), name="demo-sites")
-PUBLIC_API = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
-
-
-@app.middleware("http")
-async def require_login(request: Request, call_next):
-    """Całe /api/* wymaga zalogowania (poza logowaniem). /internal/* – token serwisowy, /demo/* – dane demo."""
-    if request.url.path.startswith("/api/") and request.url.path not in PUBLIC_API \
-            and not auth.valid_session(request.cookies.get(auth.COOKIE)):
-        return JSONResponse({"detail": "wymagane logowanie"}, status_code=401)
-    return await call_next(request)
 
 
 def _check_internal(token: str) -> None:
@@ -75,36 +64,6 @@ def _date(v: str | None) -> datetime | None:
         return datetime.fromisoformat(v) if v else None
     except ValueError:
         raise HTTPException(400, f"nieprawidłowa data: {v}") from None
-
-
-# ------------------------------------------------------------------------------ logowanie
-class LoginBody(BaseModel):
-    password: str = Field(max_length=256)
-
-
-@app.post("/api/auth/login")
-def login(body: LoginBody, request: Request, response: Response):
-    client = request.client.host if request.client else "?"
-    if auth.rate_limited(client):
-        raise HTTPException(429, "za dużo nieudanych prób – odczekaj 5 minut")
-    if not auth.check_password(body.password):
-        auth.record_failure(client)
-        raise HTTPException(401, "nieprawidłowe hasło")
-    auth.clear_failures(client)
-    response.set_cookie(auth.COOKIE, auth.make_session(), max_age=auth.SESSION_TTL, httponly=True,
-                        samesite="strict", secure=request.url.scheme == "https", path="/")
-    return {"authenticated": True}
-
-
-@app.post("/api/auth/logout")
-def logout(response: Response):
-    response.delete_cookie(auth.COOKIE, path="/")
-    return {"authenticated": False}
-
-
-@app.get("/api/auth/me")
-def me(request: Request):
-    return {"authenticated": auth.valid_session(request.cookies.get(auth.COOKIE))}
 
 
 # ------------------------------------------------------------------------------ filtry
@@ -614,8 +573,6 @@ async def internal_events(body: EventsBody, x_internal_token: str = Header(defau
 
 @sio.event
 async def connect(sid, environ, _auth=None):
-    if not auth.valid_session(auth.cookie_from_environ(environ)):
-        raise socketio.exceptions.ConnectionRefusedError("wymagane logowanie")
     with session_scope() as s:
         await sio.emit("thresholds", get_thresholds(s), to=sid)
 

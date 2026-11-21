@@ -13,3 +13,6 @@ backend/iw_backend/demo/sites/
 backend/iw_backend/demo/social/
 security/
 *.log
+# lokalne certyfikaty CA (inspekcja TLS) – tylko katalog jest w repo
+certs/*
+!certs/.gitkeep
