@@ -1,0 +1,15 @@
+# sekrety i lokalna konfiguracja narzędzi
+.env
+.claude/
+# środowiska i zależności
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+# dane lokalne, logi, raporty generowane
+backend/data/
+backend/iw_backend/demo/sites/
+backend/iw_backend/demo/social/
+security/
+*.log

@@ -1,0 +1,130 @@
+# ScopeOnMedia – cały stos on-premise jedną komendą:
+#   cp .env.example .env   (uzupełnij sekrety)   &&   docker compose up -d --build
+# Dashboard: http://localhost:8080   ·   pierwsze uruchomienie pobiera modele (~5 GB) – postęp: docker compose logs -f ollama-init
+name: scopeonmedia
+
+x-backend-env: &backend-env
+  IW_DATABASE_URL: postgresql+psycopg://scopeonmedia:${POSTGRES_PASSWORD:?ustaw w .env}@postgres:5432/scopeonmedia
+  IW_STORAGE_BACKEND: s3
+  IW_S3_ENDPOINT: seaweedfs:8333
+  IW_QUEUE_BACKEND: redis
+  IW_REDIS_URL: redis://redis:6379/0
+  IW_AI_ENGINE_URL: http://ai-engine:8100
+  IW_API_URL: http://api:8000
+  IW_SEEDS_FILE: /app/seeds.docker.json
+  IW_CORS_ORIGINS: http://localhost:8080
+  IW_ENV_FILE: /dev/null
+
+services:
+  postgres:
+    image: postgres:17.7-alpine
+    environment:
+      POSTGRES_DB: scopeonmedia
+      POSTGRES_USER: scopeonmedia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ustaw w .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scopeonmedia -d scopeonmedia"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4.7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  seaweedfs:   # Object Storage zgodny z S3 (Apache 2.0)
+    image: chrislusf/seaweedfs:4.52
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?ustaw w .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?ustaw w .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        printf '{"identities":[{"name":"iw","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}'
+        "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json &&
+        exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json
+    volumes: [objects:/data]
+
+  ollama:
+    image: ollama/ollama:0.40.16
+    volumes: [ollama:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      retries: 30
+    # GPU NVIDIA (opcjonalnie):
+    # deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+
+  ollama-init:   # jednorazowe pobranie modeli open source (Gemma 4 + EmbeddingGemma)
+    image: ollama/ollama:0.40.16
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      IW_LLM_MODEL: ${IW_LLM_MODEL:-gemma4:e2b}
+      IW_EMBED_MODEL: ${IW_EMBED_MODEL:-embeddinggemma}
+    entrypoint: ["/bin/sh", "-c", "ollama pull \"$$IW_EMBED_MODEL\" && ollama pull \"$$IW_LLM_MODEL\""]
+    depends_on:
+      ollama: {condition: service_healthy}
+    restart: "no"
+
+  ai-engine:
+    build: ./ai-engine
+    env_file: .env
+    environment:
+      IW_OLLAMA_URL: http://ollama:11434
+      IW_BACKEND_URL: http://api:8000
+      IW_ENV_FILE: /dev/null
+    depends_on:   # czeka na modele – wszystkie embeddingi w jednej przestrzeni wektorowej
+      ollama-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=5)"]
+      interval: 10s
+      retries: 20
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment: *backend-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      seaweedfs: {condition: service_started}
+      ai-engine: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/thresholds', timeout=5)"]
+      interval: 10s
+      retries: 30
+    ports: ["127.0.0.1:8000:8000"]   # dokumentacja API: http://localhost:8000/docs
+
+  worker:   # kolejka zadań + harmonogram (CronJob) – Huey na Redis
+    build: ./backend
+    env_file: .env
+    environment: *backend-env
+    command: ["huey_consumer", "iw_backend.tasks.huey", "-w", "4", "-k", "thread"]
+    depends_on:
+      api: {condition: service_healthy}
+
+  bootstrap:   # pierwszy skan danych demonstracyjnych po starcie
+    build: ./backend
+    environment: *backend-env
+    command: ["python", "-c", "import httpx; print(httpx.post('http://api:8000/api/jobs', json={'kind': 'all'}, timeout=30).text)"]
+    depends_on:
+      api: {condition: service_healthy}
+      worker: {condition: service_started}
+    restart: "no"
+
+  frontend:
+    build: ./frontend
+    ports: ["127.0.0.1:8080:80"]
+    depends_on:
+      api: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  redisdata:
+  objects:
+  ollama:

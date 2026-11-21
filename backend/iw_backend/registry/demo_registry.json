@@ -1,0 +1,23 @@
+{
+  "_comment": "FIKCYJNE podmioty demonstracyjne (domeny *.test). Kategorie zgodne z definicją firmy inwestycyjnej z załącznika do Tematu 1/2. Prawdziwy rejestr: POST /api/registry/import-knf lub IW_REGISTRY_SOURCES=demo,knf.",
+  "entities": [
+    {"name": "Vistula Dom Maklerski S.A.", "aliases": ["Vistula DM", "Vistula Trade", "VistulaTrade", "DM Vistula"],
+     "domains": ["vistula-dm.test"], "social_handles": ["@vistuladm"], "category": "dom_maklerski",
+     "authorized": true, "country": "PL", "register_id": "DEMO-DM-001"},
+    {"name": "Bank Nadwiślański S.A.", "aliases": ["Biuro Maklerskie Banku Nadwiślańskiego", "BM Nadwiślański", "Nadwiślański Inwestycje"],
+     "domains": ["bank-nadwislanski.test"], "social_handles": ["@banknadwislanski"], "category": "bank_maklerski",
+     "authorized": true, "country": "PL", "register_id": "DEMO-BANK-002"},
+    {"name": "Kopernik Securities S.A.", "aliases": ["Kopernik Securities", "DM Kopernik Securities"],
+     "domains": ["kopernik-securities.test"], "social_handles": [], "category": "dom_maklerski",
+     "authorized": true, "country": "PL", "register_id": "DEMO-DM-003"},
+    {"name": "NordFX Markets Ltd", "aliases": ["NordFX", "Nord FX", "NordFX Markets"],
+     "domains": ["nordfx-markets.test"], "social_handles": ["@nordfx_pl"], "category": "zagraniczna_firma_transgraniczna",
+     "authorized": true, "country": "CY", "register_id": "DEMO-CB-004"},
+    {"name": "Alpine Capital AG Oddział w Polsce", "aliases": ["Alpine Capital", "Alpine Capital AG"],
+     "domains": ["alpine-capital.test"], "social_handles": [], "category": "oddzial_zagranicznej_firmy",
+     "authorized": true, "country": "DE", "register_id": "DEMO-BR-005"},
+    {"name": "GoldStar Capital Partners", "aliases": ["GoldStar Capital", "Gold Star Capital"],
+     "domains": ["goldstar-capital.test"], "social_handles": ["@goldstarcapital"], "category": "ostrzezenie_knf",
+     "authorized": false, "country": "PL", "register_id": "DEMO-WARN-001"}
+  ]
+}

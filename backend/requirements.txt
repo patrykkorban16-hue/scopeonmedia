@@ -1,0 +1,16 @@
+# Backend: REST API + WebSocket, silnik scrapingu, kolejka zadań, harmonogram, składowanie.
+# Wersje przypięte; skan podatności: scripts/security-scan.ps1 (pip-audit).
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+python-socketio==5.18.1
+sqlalchemy==2.1.8
+psycopg[binary]==3.3.8
+httpx==0.28.1
+beautifulsoup4==4.15.0
+lxml==6.1.3
+huey==3.5.4
+redis==8.1.0
+minio==7.2.20
+playwright==1.64.1
+numpy==2.5.4
+python-dotenv==1.2.4

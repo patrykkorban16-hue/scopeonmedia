@@ -1,0 +1,14 @@
+{
+  "web": [
+    {"url": "http://127.0.0.1:8000/demo/sites/index.html", "max_depth": 2, "max_pages": 100}
+  ],
+  "urls": [],
+  "social": {
+    "platforms": ["facebook", "instagram", "tiktok"],
+    "queries": ["broker bonus kod polecający"]
+  },
+  "search": {
+    "enabled": false,
+    "queries": ["kod polecający broker CFD", "indywidualne rekomendacje inwestycyjne konsultacja", "family office zarządzanie majątkiem"]
+  }
+}

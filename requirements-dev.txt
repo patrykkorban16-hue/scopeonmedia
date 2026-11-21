@@ -1,0 +1,3 @@
+# Narzędzia deweloperskie (testy, audyt łańcucha dostaw) – wspólne dla backend i ai-engine.
+pytest==9.2.0
+pip-audit==2.10.1

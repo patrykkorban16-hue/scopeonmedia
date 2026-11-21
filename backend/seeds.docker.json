@@ -1,0 +1,11 @@
+{
+  "web": [
+    {"url": "http://api:8000/demo/sites/index.html", "max_depth": 2, "max_pages": 100}
+  ],
+  "urls": [],
+  "social": {
+    "platforms": ["facebook", "instagram", "tiktok"],
+    "queries": ["broker bonus kod polecający"]
+  },
+  "search": {"enabled": false, "queries": []}
+}
