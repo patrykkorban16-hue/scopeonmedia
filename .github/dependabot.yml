@@ -1,0 +1,27 @@
+# Automatyczne PR z aktualizacjami zależności. cooldown: nowa wersja musi mieć co najmniej 14 dni,
+# zanim zostanie zaproponowana (ochrona przed świeżo przejętymi paczkami).
+# Po PR dla Pythona odśwież lockfile: uv pip compile requirements.txt --universal --generate-hashes ... (README).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directories: ["/backend", "/ai-engine"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14

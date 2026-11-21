@@ -17,6 +17,13 @@ def _f(name: str, default: float) -> float:
 BACKEND_URL = os.getenv("IW_BACKEND_URL", "http://127.0.0.1:8000")
 INTERNAL_TOKEN = os.getenv("IW_INTERNAL_TOKEN", "")
 
+
+def require_internal_token() -> None:
+    """Fail fast: bez sekretu silnik nie pobierze rejestru z backendu – lepiej nie startować wcale."""
+    if not INTERNAL_TOKEN or INTERNAL_TOKEN.startswith("change-me") or len(INTERNAL_TOKEN) < 24:
+        raise RuntimeError("IW_INTERNAL_TOKEN nie jest ustawiony albo ma wartość przykładową/za krótką (min. 24 znaki). "
+                           "Uzupełnij .env – losowy sekret generuje: scripts/start-local.ps1 -EnvOnly")
+
 # Silnik inferencji LLM: ollama | openai (vLLM, llama.cpp server – API zgodne z OpenAI) | none
 LLM_ENGINE = os.getenv("IW_LLM_ENGINE", "ollama")
 OLLAMA_URL = os.getenv("IW_OLLAMA_URL", "http://127.0.0.1:11434")
@@ -27,5 +34,5 @@ LLM_WEIGHT = _f("IW_LLM_WEIGHT", 0.35)          # udział oceny LLM w końcowym 
 
 # Embeddingi: ollama (model wielojęzyczny) z fallbackiem na haszowane n-gramy znakowe
 EMBED_ENGINE = os.getenv("IW_EMBED_ENGINE", "ollama")   # ollama | hashing
-EMBED_MODEL = os.getenv("IW_EMBED_MODEL", "embeddinggemma")
+EMBED_MODEL = os.getenv("IW_EMBED_MODEL", "qwen3-embedding:0.6b")    # Apache 2.0, wielojęzyczny
 EMBED_DIM_HASHING = 512

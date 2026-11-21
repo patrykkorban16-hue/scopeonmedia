@@ -21,7 +21,8 @@ from .scraper.http import Fetcher
 
 log = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-huey =(RedisHuey("investwatch", url=config.REDIS_URL) if config.QUEUE_BACKEND == "redis"
+config.require_internal_token()      # worker bez sekretu nie mógłby wysyłać zdarzeń do API
+huey = (RedisHuey("investwatch", url=config.REDIS_URL) if config.QUEUE_BACKEND == "redis"
         else SqliteHuey("investwatch", filename=config.QUEUE_SQLITE))
 init_db()
 

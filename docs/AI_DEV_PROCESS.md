@@ -31,7 +31,8 @@ na weryfikacji, nie na zaufaniu do wygenerowanego kodu.
    - LLM obniżał trafność Modułu 2, bo nie widzi układu strony, więc w M2 został opinią doradczą.
 6. **Łańcuch dostaw:**
    - wersje przypięte i wydane co najmniej 2 tygodnie przed instalacją;
-   - `pip-audit` i `npm audit` (0 podatności);
+   - `pip-audit` i `npm audit` (0 podatności), lockfile'y Pythona z hashami;
+   - automatyczny audyt i testy w GitHub Actions oraz Dependabot (aktualizacje nie młodsze niż 14 dni);
    - sekrety wyłącznie w `.env` generowanym losowo.
 
 ## Zasady

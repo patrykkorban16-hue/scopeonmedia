@@ -28,7 +28,7 @@ foreach ($svc in "backend", "ai-engine") {
     $vp = Join-Path $root "$svc\.venv\Scripts\python.exe"
     if (-not (Test-Path $vp)) {
         & $py -m venv (Join-Path $root "$svc\.venv")
-        & $vp -m pip install -q -r (Join-Path $root "$svc\requirements.txt")
+        & $vp -m pip install -q --require-hashes -r (Join-Path $root "$svc\requirements.lock")
     }
 }
 $bpy = Join-Path $root "backend\.venv\Scripts\python.exe"

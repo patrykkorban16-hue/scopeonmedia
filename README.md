@@ -21,7 +21,7 @@ docker compose up -d --build
 ```
 
 Dashboard: http://localhost:8080 · API: http://localhost:8000/docs.
-Pierwszy start pobiera modele Gemma 4 i EmbeddingGemma (ok. 5 GB, `docker compose logs -f ollama-init`), a potem `bootstrap` zleca skan danych demo.
+Pierwszy start pobiera modele Gemma 4 i Qwen3-Embedding (ok. 5 GB, `docker compose logs -f ollama-init`), a potem `bootstrap` zleca skan danych demo.
 
 ### Lokalnie na Windows (bez Dockera)
 
@@ -37,9 +37,9 @@ Skrypt tworzy `.env` z losowymi sekretami, instaluje zależności i uruchamia: a
 
 | Profil | CPU / RAM | Dysk | Uwagi |
 |---|---|---|---|
-| minimum (`gemma4:e2b`, CPU) | 4 rdzenie / 16 GB | 15 GB | ocena LLM ok. 25–60 s na materiał, w tle |
-| zalecany (`gemma4:e4b`) | 8 rdzeni / 32 GB lub GPU 8 GB VRAM | 20 GB | `IW_LLM_MODEL=gemma4:e4b` |
-| bez LLM | 2 rdzenie / 4 GB | 3 GB | `IW_LLM_ENGINE=none` |
+| minimum (`gemma4:e2b`, CPU) | 4 rdzenie / 16 GB | 15 GB | zmierzone (Ryzen 7 4700U, 16 GB): ocena LLM ok. 25–60 s na materiał, w tle |
+| zalecany (`gemma4:e4b`) | 8 rdzeni / 32 GB lub GPU 8 GB VRAM | 20 GB | szacunek, niezmierzone; `IW_LLM_MODEL=gemma4:e4b` |
+| bez LLM | 2 rdzenie / 4 GB | 3 GB | szacunek, niezmierzone; `IW_LLM_ENGINE=none` |
 
 ## Serwisy i konfiguracja
 
@@ -55,8 +55,8 @@ Najważniejsze zmienne (`.env`, wzór w `.env.example`):
 
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
-| `IW_INTERNAL_TOKEN` | – | sekret komunikacji worker/ai-engine → API (wymagany) |
-| `IW_LLM_MODEL` / `IW_EMBED_MODEL` | `gemma4:e2b` / `embeddinggemma` | modele w Ollamie |
+| `IW_INTERNAL_TOKEN` | – | sekret komunikacji worker/ai-engine → API; wymagany, min. 24 znaki – bez niego serwisy nie startują |
+| `IW_LLM_MODEL` / `IW_EMBED_MODEL` | `gemma4:e2b` / `qwen3-embedding:0.6b` | modele w Ollamie (oba Apache 2.0) |
 | `IW_LLM_ENGINE` | `ollama` | `ollama`, `openai` (vLLM, llama.cpp server) lub `none` |
 | `IW_LLM_REVIEW` | `uncertain` | automatyczna ocena LLM: `all`, `uncertain` (score 0,2–0,85) lub `off` |
 | `IW_RENDER_MODE` | `auto` | Playwright: `auto`, `always` lub `never` |
@@ -70,11 +70,17 @@ Najważniejsze zmienne (`.env`, wzór w `.env.example`):
 ## Testy i bezpieczeństwo
 
 ```powershell
-backend\.venv\Scripts\python -m pip install -r requirements-dev.txt      # pytest, pip-audit (analogicznie ai-engine)
+backend\.venv\Scripts\python -m pip install -r requirements-dev.txt      # pytest, pip-audit, uv (analogicznie ai-engine)
 backend\.venv\Scripts\python -m pytest backend\tests
 ai-engine\.venv\Scripts\python -m pytest ai-engine\tests
 backend\.venv\Scripts\python -m iw_backend.cli evaluate        # precyzja / pełność na zbiorze walidacyjnym
-powershell -ExecutionPolicy Bypass -File scripts\security-scan.ps1   # pip-audit + npm audit → security/
+powershell -ExecutionPolicy Bypass -File scripts\security-scan.ps1   # pip-audit (lockfile'y) + npm audit → security/
 ```
+
+Zależności Pythona instaluje się z `requirements.lock` (wszystkie paczki z hashami, `pip install --require-hashes`).
+Po zmianie `requirements.txt` odśwież lockfile w katalogu serwisu:
+`uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 --no-header -o requirements.lock`.
+GitHub Actions (`.github/workflows/security.yml`) przy każdym pushu i co tydzień sprawdza zgodność lockfile'ów, audytuje
+zależności i uruchamia testy oraz build; Dependabot proponuje aktualizacje nie młodsze niż 14 dni.
 
 Architektura, kontrakty i reguły: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · pokrycie wymagań: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) · proces z asystentem AI: [docs/AI_DEV_PROCESS.md](docs/AI_DEV_PROCESS.md).

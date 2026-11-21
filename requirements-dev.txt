@@ -1,3 +1,4 @@
 # Narzędzia deweloperskie (testy, audyt łańcucha dostaw) – wspólne dla backend i ai-engine.
 pytest==9.2.0
 pip-audit==2.10.1
+uv==0.13.7          # generowanie requirements.lock z hashami (uv pip compile --universal --generate-hashes)

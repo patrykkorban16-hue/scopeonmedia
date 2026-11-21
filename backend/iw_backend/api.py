@@ -36,13 +36,12 @@ DEMO_DIR = Path(__file__).parent / "demo"
 
 @asynccontextmanager
 async def lifespan(_app):
+    config.require_internal_token()
     init_db()
     with session_scope() as s:
         empty = not s.scalar(select(func.count()).select_from(Entity))
     if empty and "demo" in config.REGISTRY_SOURCES:
         registry.load_demo()
-    if not config.INTERNAL_TOKEN:
-        log.warning("IW_INTERNAL_TOKEN nie ustawiony – endpointy /internal są wyłączone (skonfiguruj .env)")
     yield
 
 

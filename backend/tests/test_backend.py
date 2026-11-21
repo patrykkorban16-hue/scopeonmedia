@@ -52,6 +52,19 @@ def test_social_item_normalization():
     assert d["source_type"] == "tiktok" and "#ad" in d["text"] and platform_of("https://m.facebook.com/x") == "facebook"
 
 
+def test_internal_token_fail_fast(monkeypatch):
+    import pytest
+
+    from iw_backend import config
+
+    for bad in ("", "change-me-long-random-string", "za-krotki"):
+        monkeypatch.setattr(config, "INTERNAL_TOKEN", bad)
+        with pytest.raises(RuntimeError):
+            config.require_internal_token()
+    monkeypatch.setattr(config, "INTERNAL_TOKEN", "x" * 32)
+    config.require_internal_token()
+
+
 def test_risk_levels_follow_threshold():
     assert risk_level(0.4, 0.5) == "low"
     assert risk_level(0.6, 0.5) == "medium"
@@ -67,7 +80,7 @@ def test_api_thresholds_calibration_and_internal_auth():
         cal = c.get("/api/calibration/2").json()
         assert len(cal["curve"]) == 101 and cal["threshold"] == 0.42
         assert c.get("/internal/registry").status_code == 403
-        reg = c.get("/internal/registry", headers={"X-Internal-Token": "test-token"}).json()
+        reg = c.get("/internal/registry", headers={"X-Internal-Token": "test-token-0123456789abcdef0123"}).json()
         assert len(reg["entities"]) == 6 and reg["version"]
         assert c.patch("/api/findings/999", json={"status": "confirmed"}).status_code == 404
         assert c.patch("/api/findings/999", json={"status": "zly"}).status_code == 400

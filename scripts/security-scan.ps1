@@ -9,7 +9,8 @@ $failed = $false
 
 foreach ($svc in "backend", "ai-engine") {
     $py = Join-Path $root "$svc\.venv\Scripts\python.exe"
-    & $py -m pip_audit -r (Join-Path $root "$svc\requirements.txt") --format json -o (Join-Path $out "pip-audit-$svc.json")
+    # audyt pełnego lockfile'a (zależności bezpośrednie + pośrednie, z weryfikacją hashy)
+    & $py -m pip_audit -r (Join-Path $root "$svc\requirements.lock") --require-hashes --disable-pip --format json -o (Join-Path $out "pip-audit-$svc.json")
     if ($LASTEXITCODE -ne 0) { $failed = $true; Write-Host "[$svc] wykryto podatności – zobacz security\pip-audit-$svc.json" }
     else { Write-Host "[$svc] pip-audit: brak znanych podatności" }
 }

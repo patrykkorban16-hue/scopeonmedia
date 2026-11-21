@@ -11,7 +11,7 @@ Status: **✔ zweryfikowane** = uruchomione i sprawdzone lokalnie (testy, przegl
 | Baza metadanych SQL, baza treści + Object Storage | `db.py` (documents / contents / findings), `storage.py` | ✔ SQLite + pliki · ◐ PostgreSQL + SeaweedFS |
 | CronJob | `@huey.periodic_task(crontab)` – web, social, recheck, rejestr KNF, heartbeat | ✔ |
 | Usuwanie tagów, normalizacja, deduplikacja | `ai-engine/iw_ai/preprocess.py`, `text.py` (sha256 + SimHash) | ✔ |
-| Tokeny i embeddingi | `embeddings.py` – EmbeddingGemma w Ollamie, zapasowo haszowane n-gramy | ✔ |
+| Tokeny i embeddingi | `embeddings.py` – Qwen3-Embedding 0.6B w Ollamie (Apache 2.0), zapasowo haszowane n-gramy | ✔ |
 | Silnik inferencji, model open source | Ollama + `gemma4:e2b`; vLLM / llama.cpp przez API OpenAI | ✔ Ollama · ◐ vLLM |
 | Klasyfikacja przez funkcję scoringową | `scoring.py`, moduły `m1/m2/m3` | ✔ |
 | Agregator 1+2+3 | `aggregator.py` → `UnifiedFinding` | ✔ |
@@ -27,8 +27,9 @@ Status: **✔ zweryfikowane** = uruchomione i sprawdzone lokalnie (testy, przegl
 | Definicja firmy inwestycyjnej (zał. 1/2) | kategorie rejestru + importer stron KNF (`registry/knf.py`) | ✔ import na żywo 21.11.2026: 760 podmiotów (28 DM, 10 banków, 10 oddziałów, 712 transgranicznych) |
 | Separacja frontend / backend / AI | 3 katalogi, 3 obrazy, komunikacja HTTP | ✔ |
 | Docker Compose – start jedną komendą | `docker-compose.yml` (healthchecki, pobieranie modeli, bootstrap) | ◐ `docker compose config` poprawny; brak WSL2 na maszynie deweloperskiej |
-| Tylko darmowe modele i otwarte bazy | Gemma 4, EmbeddingGemma, PostgreSQL, Redis, SeaweedFS | ✔ |
-| Skan zależności, sekrety w .env | `scripts/security-scan.ps1` (pip-audit, npm audit), `.env.example` | ✔ 0 podatności (21.11.2026) |
+| Tylko darmowe modele i otwarte bazy | Gemma 4 i Qwen3-Embedding (oba Apache 2.0), PostgreSQL, Redis, SeaweedFS | ✔ |
+| Skan zależności | `requirements.lock` z hashami (`--require-hashes`), `scripts/security-scan.ps1` (pip-audit pełnych lockfile'ów, npm audit), GitHub Actions co push i co tydzień, Dependabot z 14-dniowym opóźnieniem | ✔ 0 podatności lokalnie · ◐ CI jeszcze nie uruchomione na GitHubie |
+| Sekrety w .env | `.env` poza repozytorium, losowe sekrety ze `start-local.ps1`, serwisy nie startują bez `IW_INTERNAL_TOKEN` lub z wartością przykładową | ✔ |
 | README: Quick Start, sprzęt, konfiguracja | `README.md` | ✔ |
 | Console.log | brak `console.*` w kodzie; konsola bez błędów po załadowaniu | ✔ |
 

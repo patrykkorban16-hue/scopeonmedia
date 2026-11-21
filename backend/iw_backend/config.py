@@ -45,6 +45,13 @@ CRON_REGISTRY = os.getenv("IW_CRON_REGISTRY", "0 4 * * 1")          # import rej
 API_PUBLIC_URL = os.getenv("IW_API_URL", "http://127.0.0.1:8000")   # adres API widziany przez worker
 AI_ENGINE_URL = os.getenv("IW_AI_ENGINE_URL", "http://127.0.0.1:8100")
 INTERNAL_TOKEN = os.getenv("IW_INTERNAL_TOKEN", "")
+
+
+def require_internal_token() -> None:
+    """Fail fast: bez sekretu albo z wartością przykładową z .env.example serwis się nie uruchamia."""
+    if not INTERNAL_TOKEN or INTERNAL_TOKEN.startswith("change-me") or len(INTERNAL_TOKEN) < 24:
+        raise RuntimeError("IW_INTERNAL_TOKEN nie jest ustawiony albo ma wartość przykładową/za krótką (min. 24 znaki). "
+                           "Uzupełnij .env – losowy sekret generuje: scripts/start-local.ps1 -EnvOnly")
 CORS_ORIGINS = _list("IW_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
 # --- scraping -------------------------------------------------------------------------
