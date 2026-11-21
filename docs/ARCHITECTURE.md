@@ -84,6 +84,21 @@ telefon, adres.
 - `UnifiedFinding = {module, category, score, rule_score, firm, advertiser, entity, excerpt, reasons[], rules[], details}`
 - Zdarzenia Socket.IO: `alert`, `finding_updated`, `thresholds`, `job`, `registry`
 
+## Bezpieczeństwo
+
+Treść zbierana z internetu jest traktowana jako wrogie dane wejściowe (`backend/iw_backend/security.py`):
+
+| Zagrożenie | Zabezpieczenie |
+|---|---|
+| Dostęp do dashboardu i API | logowanie hasłem zespołu, sesja w ciasteczku HttpOnly/SameSite=Strict (12 h), limit 5 prób / 5 min; WebSocket tylko z sesją; `/internal/*` – token serwisowy |
+| XSS przez linki ze stron | tylko adresy `http(s)` w bazie (`safe_url`) i w dashboardzie (`safeHref`); CSP w nginx |
+| Podszywanie się pod stronę firmy | adres kanoniczny przyjmowany tylko z tej samej witryny; etykiety walidacyjne tylko z lokalnego demo |
+| SSRF (crawler jako proxy do sieci wewnętrznej) | blokada adresów prywatnych, loopback i link-local – przed każdym zapytaniem, każdym przekierowaniem i każdym zasobem ładowanym przez Playwright; limit rozmiaru odpowiedzi |
+| Formuły w eksporcie CSV | komórki zaczynające się od `= + - @` poprzedzone apostrofem |
+| Prompt injection (strona steruje LLM) | treść oznaczona jako dane, wykrywanie typowych poleceń (ocena pominięta, sygnał dla analityka), LLM może obniżyć wynik reguł najwyżej o 0,15 |
+| Sekrety | tylko w `.env` (poza repozytorium), losowane kryptograficznie; serwisy nie startują bez nich lub z wartościami przykładowymi |
+| Łańcuch dostaw | lockfile'y z hashami, pip-audit, npm audit, ruff (bandit), CI co tydzień, Dependabot z 14-dniowym opóźnieniem |
+
 ## Ograniczenia MVP
 
 - Zbiór walidacyjny jest mały (44 materiały) i przygotowany razem z regułami. Wyniki na nim nie są miarą skuteczności
@@ -91,3 +106,8 @@ telefon, adres.
 - Tokeny oficjalnych API platform nie były testowane. Kolektory zgodne z dokumentacją API działają w demo na mocku.
 - Lista ostrzeżeń publicznych KNF jest w demo wpisana ręcznie; automatyczny import obejmuje rejestr firm inwestycyjnych.
 - Wyszukiwanie near-duplikatów jest liniowe (do 20 tys. ostatnich dokumentów); na większą skalę potrzebny jest indeks LSH.
+- Jedno wspólne hasło zespołu: historia statusów nie zapisuje, który analityk podjął decyzję. Przy wdrożeniu – konta
+  imienne (np. SSO/LDAP Urzędu).
+- Ochrona SSRF sprawdza adres DNS przed zapytaniem; atak DNS rebinding (zmiana adresu między sprawdzeniem a połączeniem)
+  wymagałby dodatkowo przypinania IP lub serwera proxy z listą dozwolonych adresów.
+- Brak polityki retencji zebranych danych osobowych (NIP, e-maile, telefony z ofert) – do ustalenia z IOD przed pilotażem.

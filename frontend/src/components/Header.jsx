@@ -13,7 +13,7 @@ function Indicator({ state, label, value, title }) {
 
 const st = (ok) => (ok === true ? "ok" : ok === false ? "bad" : "off");
 
-export default function Header({ connected, health, lastJob, filters, onRun }) {
+export default function Header({ connected, health, lastJob, filters, onRun, onLogout }) {
   const [busy, setBusy] = useState(false);
   const ai = health?.ai_engine;
   const running = lastJob?.status === "running";
@@ -31,7 +31,7 @@ export default function Header({ connected, health, lastJob, filters, onRun }) {
         <span className="mark" aria-hidden />
         <div>
           <div className="wordmark">ScopeOnMedia</div>
-          <div className="kicker">UKNF · monitoring promocji instrumentów finansowych</div>
+          <div className="kicker">monitoring promocji instrumentów finansowych</div>
         </div>
       </div>
       <dl className="status" aria-label="Stan systemu">
@@ -48,6 +48,7 @@ export default function Header({ connected, health, lastJob, filters, onRun }) {
         <button className="btn" disabled={busy || running} onClick={run}>{running ? "Skan trwa…" : busy ? "Zlecono…" : "Uruchom skan"}</button>
         <a className="btn ghost" href={api.exportUrl(filters, "csv")}>CSV</a>
         <a className="btn ghost" href={api.exportUrl(filters, "json")}>JSON</a>
+        <button className="btn ghost" onClick={onLogout} title="Wyloguj">Wyloguj</button>
       </div>
     </header>
   );

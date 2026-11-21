@@ -184,6 +184,8 @@ class LLMReviewResponse(BaseModel):
     probability: float | None = None
     score: float | None = None
     weight: float | None = None
+    max_decrease: float | None = None
+    injection_suspected: bool = False
     reasons: list[str] = Field(default_factory=list)
     model: str | None = None
     error: str | None = None

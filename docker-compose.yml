@@ -12,7 +12,7 @@ x-backend-env: &backend-env
   IW_AI_ENGINE_URL: http://ai-engine:8100
   IW_API_URL: http://api:8000
   IW_SEEDS_FILE: /app/seeds.docker.json
-  IW_CORS_ORIGINS: http://localhost:8080
+  IW_CORS_ORIGINS: ${IW_CORS_ORIGINS:-http://localhost:8080}   # adres(y) dashboardu, np. http://serwer:8080
   IW_ENV_FILE: /dev/null
 
 services:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -47,6 +48,16 @@ AI_ENGINE_URL = os.getenv("IW_AI_ENGINE_URL", "http://127.0.0.1:8100")
 INTERNAL_TOKEN = os.getenv("IW_INTERNAL_TOKEN", "")
 
 
+DASHBOARD_PASSWORD = os.getenv("IW_DASHBOARD_PASSWORD", "")
+
+
+def require_dashboard_password() -> None:
+    """Fail fast: dashboard bez hasła (albo z hasłem przykładowym) nie startuje."""
+    if not DASHBOARD_PASSWORD or DASHBOARD_PASSWORD.startswith("change-me") or len(DASHBOARD_PASSWORD) < 8:
+        raise RuntimeError("IW_DASHBOARD_PASSWORD nie jest ustawione albo ma wartość przykładową/za krótką (min. 8 znaków). "
+                           "Uzupełnij .env – scripts/start-local.ps1 -EnvOnly dopisuje losowe hasło")
+
+
 def require_internal_token() -> None:
     """Fail fast: bez sekretu albo z wartością przykładową z .env.example serwis się nie uruchamia."""
     if not INTERNAL_TOKEN or INTERNAL_TOKEN.startswith("change-me") or len(INTERNAL_TOKEN) < 24:
@@ -64,6 +75,11 @@ RESPECT_ROBOTS = _b("IW_RESPECT_ROBOTS", True)
 RENDER_MODE = os.getenv("IW_RENDER_MODE", "auto")                   # auto | always | never (Playwright)
 SCREENSHOTS = _b("IW_SCREENSHOTS", True)
 SEEDS_FILE = Path(os.getenv("IW_SEEDS_FILE", BASE_DIR / "seeds.json"))
+MAX_PAGE_BYTES = int(os.getenv("IW_MAX_PAGE_BYTES", str(5 * 1024 * 1024)))   # większe odpowiedzi są pomijane
+MAX_REDIRECTS = 5
+# hosty lokalne, które crawler może odwiedzać mimo ochrony SSRF (domyślnie: własne API z danymi demo)
+TRUSTED_LOCAL_HOSTS = {h.lower() for h in _list(
+    "IW_TRUSTED_LOCAL_HOSTS", f"{urlparse(API_PUBLIC_URL).netloc},127.0.0.1:8000,localhost:8000")}
 REGISTRY_SOURCES = _list("IW_REGISTRY_SOURCES", "demo")             # demo, knf
 
 # tokeny oficjalnych (bezpłatnych) API platform – puste = kolektor czyta mock /demo/api/<platforma>

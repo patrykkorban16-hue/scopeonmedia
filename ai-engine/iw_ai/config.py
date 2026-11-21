@@ -31,6 +31,7 @@ OPENAI_COMPAT_URL = os.getenv("IW_OPENAI_COMPAT_URL", "http://127.0.0.1:8080/v1"
 LLM_MODEL = os.getenv("IW_LLM_MODEL", "gemma4:e2b")
 LLM_TIMEOUT = _f("IW_LLM_TIMEOUT", 180)
 LLM_WEIGHT = _f("IW_LLM_WEIGHT", 0.35)          # udział oceny LLM w końcowym score (gdy dostępna)
+LLM_MAX_DECREASE = _f("IW_LLM_MAX_DECREASE", 0.15)   # o ile najwyżej LLM może obniżyć wynik reguł
 
 # Embeddingi: ollama (model wielojęzyczny) z fallbackiem na haszowane n-gramy znakowe
 EMBED_ENGINE = os.getenv("IW_EMBED_ENGINE", "ollama")   # ollama | hashing

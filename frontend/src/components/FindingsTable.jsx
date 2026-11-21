@@ -1,4 +1,4 @@
-import { fmtDate, humanize, MODULES, SOURCES } from "../constants.js";
+import { fmtDate, humanize, MODULES, safeHref, SOURCES } from "../constants.js";
 import RiskBadge from "./RiskBadge.jsx";
 import StatusSelect from "./StatusSelect.jsx";
 
@@ -21,7 +21,7 @@ function Row({ f, selected, onSelect, onStatusChange }) {
       <td><div className="excerpt">{f.excerpt}</div></td>
       <td>
         <div>{SOURCES[f.source_type] || f.source_type}{f.availability === "removed" && <span className="tag">usunięte</span>}</div>
-        <a className="url small" href={f.url} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}>
+        <a className="url small" href={safeHref(f.url)} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}>
           {f.url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
         </a>
       </td>

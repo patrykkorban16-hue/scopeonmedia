@@ -20,6 +20,7 @@ import httpx
 
 from .. import config
 from . import render as renderer
+from ..security import is_trusted_local
 from .extract import extract_html, extract_social_item
 from .http import Fetcher, headers
 
@@ -98,7 +99,9 @@ def search_web(query: str, fetcher: Fetcher, limit: int = 10) -> list[str]:
 def _mock(platform: str, query: str, fetcher: Fetcher) -> list[dict]:
     r = fetcher.get(f"{config.SOCIAL_MOCK_BASE}/{platform}", params={"q": query})
     r.raise_for_status()
-    return r.json()["data"]
+    trusted = is_trusted_local(config.SOCIAL_MOCK_BASE)
+    # znacznik „lokalny zbiór demo” – tylko wtedy przyjmujemy etykiety walidacyjne
+    return [dict(item, _trusted_demo=trusted) for item in r.json()["data"]]
 
 
 def collect_meta_ads(query: str, fetcher: Fetcher) -> list[dict]:
@@ -166,7 +169,10 @@ SOCIAL = {"facebook": collect_meta_ads, "tiktok": collect_tiktok, "instagram": c
 def collect_social(platform: str, query: str, fetcher: Fetcher | None = None) -> Iterator[dict]:
     fetcher = fetcher or Fetcher()
     for item in SOCIAL[platform](query, fetcher):
+        trusted = bool(item.pop("_trusted_demo", False))
         item.setdefault("platform", platform)
-        meta = extract_social_item(item)
+        meta = extract_social_item(item, trusted=trusted)
+        if meta is None:            # brak poprawnego adresu http(s) – pomijamy
+            continue
         yield {"meta": meta, "text": meta.pop("text"), "raw": json.dumps(item, ensure_ascii=False).encode("utf-8"),
                "status": 200}

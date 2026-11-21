@@ -57,7 +57,10 @@ export const RULE_STATUS = {
   na: { label: "nie dotyczy", short: "–" },
 };
 
-export const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("pl-PL") : "—");
+// Linki z zebranych materiałów: tylko http(s) – żadnych javascript:, data: itp. (ochrona przed XSS)
+export const safeHref = (u) => (typeof u === "string" && /^https?:\/\//i.test(u.trim()) ? u.trim() : undefined);
+
+export const fmtDate =(iso) => (iso ? new Date(iso).toLocaleDateString("pl-PL") : "—");
 export const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString("pl-PL") : "—");
 export const pct = (x) => `${Math.round((x || 0) * 100)}%`;
 // Etykiety kategorii z silnika AI (identyfikatory bez polskich znaków → tekst do wyświetlenia)

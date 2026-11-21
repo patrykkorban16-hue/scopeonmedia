@@ -7,6 +7,8 @@ from iw_backend.registry import derive_aliases
 from iw_backend.registry.knf import parse_page
 from iw_backend.scraper.extract import extract_html, extract_social_item, platform_of
 
+DASH_PASSWORD = "test-dashboard-haslo-123"
+
 KNF_SAMPLE = """
 <table class="rounded-default"><tbody>
 <tr><th scope="row">Nazwa</th><td><span>CERES DOM INWESTYCYJNY S.A.<br/><strike>EFIX DOM MAKLERSKI S.A.</strike></span></td></tr>
@@ -75,6 +77,7 @@ def test_api_thresholds_calibration_and_internal_auth():
     from iw_backend.api import app
 
     with TestClient(app) as c:
+        assert c.post("/api/auth/login", json={"password": DASH_PASSWORD}).status_code == 200
         assert c.put("/api/thresholds/2", json={"value": 0.42}).json()["2"] == 0.42
         assert c.put("/api/thresholds/2", json={"value": 1.5}).status_code == 422
         cal = c.get("/api/calibration/2").json()
@@ -86,3 +89,58 @@ def test_api_thresholds_calibration_and_internal_auth():
         assert c.patch("/api/findings/999", json={"status": "zly"}).status_code == 400
         assert c.get("/api/findings?risk=high&module=1").json()["total"] == 0
         assert json.loads(c.get("/demo/api/tiktok").text)["data"] is not None
+        # ochrona SSRF: adresu metadanych chmury / sieci lokalnej nie da się zlecić do pobrania
+        for bad in ("http://169.254.169.254/latest/meta-data", "http://127.0.0.1:11434/api/tags", "javascript:alert(1)"):
+            assert c.post("/api/jobs", json={"kind": "web", "url": bad}).status_code == 400
+        # eksport CSV jest dostępny po zalogowaniu
+        assert c.get("/api/export?fmt=csv").status_code == 200
+
+
+def test_dashboard_requires_login_and_limits_attempts():
+    from iw_backend import auth
+    from iw_backend.api import app
+
+    with TestClient(app) as c:
+        assert c.get("/api/findings").status_code == 401
+        assert c.get("/api/auth/me").json() == {"authenticated": False}
+        assert c.post("/api/auth/login", json={"password": "zle-haslo"}).status_code == 401
+        assert c.post("/api/auth/login", json={"password": DASH_PASSWORD}).status_code == 200
+        assert c.get("/api/auth/me").json() == {"authenticated": True}
+        assert c.get("/api/findings").status_code == 200
+        c.post("/api/auth/logout")
+        assert c.get("/api/findings").status_code == 401
+        for _ in range(auth.MAX_FAILURES):
+            c.post("/api/auth/login", json={"password": "zle-haslo"})
+        assert c.post("/api/auth/login", json={"password": DASH_PASSWORD}).status_code == 429
+        auth.clear_failures("testclient")
+    assert not auth.valid_session("123.abc.def") and not auth.valid_session(None)
+
+
+def test_url_safety_ssrf_and_csv():
+    from iw_backend.security import csv_safe, fetch_allowed, safe_url
+
+    assert safe_url("javascript:alert(1)") is None and safe_url("data:text/html,x") is None
+    assert safe_url("https://firma.test/a") == "https://firma.test/a"
+    for bad in ("http://127.0.0.1:9999/", "http://10.0.0.5/", "http://169.254.169.254/", "http://[::1]/", "ftp://1.1.1.1/"):
+        assert not fetch_allowed(bad), bad
+    assert fetch_allowed("http://127.0.0.1:8000/demo/sites/index.html")      # zaufany host demo
+    assert fetch_allowed("https://1.1.1.1/")
+    assert csv_safe("=HYPERLINK(\"http://x\")") == "'=HYPERLINK(\"http://x\")" and csv_safe("+48 123") == "'+48 123"
+    assert csv_safe("Zwykły tekst") == "Zwykły tekst" and csv_safe(0.5) == 0.5
+
+
+def test_foreign_page_cannot_hijack_url_or_labels():
+    html = """<html><head><link rel="canonical" href="https://vistula-dm.test/rachunek-maklerski">
+    <meta name="iw-ground-truth" content='{"2": false}'>
+    <script type="application/ld+json">{"author":{"name":"x","url":"javascript:alert(2)"}}</script></head>
+    <body><a href="javascript:alert(3)">a</a><a href="https://ok.test/b">b</a></body></html>"""
+    d = extract_html(html, "https://zly.test/podszywka")
+    assert d["url"] == "https://zly.test/podszywka"            # obcy canonical odrzucony
+    assert d["author_url"] is None and d["links"] == ["https://ok.test/b"]
+    assert d["ground_truth"] == {}                              # etykiety tylko z zaufanego demo
+    js = extract_html('<html><head><link rel="canonical" href="javascript:alert(1)"></head><body>x</body></html>',
+                      "https://zly.test/x")
+    assert js["url"] == "https://zly.test/x"
+    sub = extract_html('<html><head><link rel="canonical" href="https://www.youtube.com/watch?v=1"></head><body>x</body></html>',
+                       "https://m.youtube.com/watch?v=1")
+    assert sub["url"] == "https://www.youtube.com/watch?v=1"   # ta sama witryna – przyjęty

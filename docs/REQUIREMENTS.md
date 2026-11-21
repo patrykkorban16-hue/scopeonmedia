@@ -1,4 +1,4 @@
-# Pokrycie wymagań (opis wyzwania UKNF + załączniki)
+# Pokrycie wymagań (opis wyzwania + załączniki)
 
 Status: **✔ zweryfikowane** = uruchomione i sprawdzone lokalnie (testy, przeglądarka, pomiar) · **◐ zaimplementowane, niezweryfikowane** = kod gotowy, brak środowiska do uruchomienia.
 

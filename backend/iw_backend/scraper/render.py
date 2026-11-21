@@ -10,7 +10,8 @@ import logging
 import threading
 
 from .. import config
-from .http import random_ua
+from ..security import fetch_allowed
+from .http import FetchBlocked, random_ua
 
 log = logging.getLogger(__name__)
 VIEWPORTS = {"desktop": (1366, 900), "tablet": (820, 1180), "phone": (390, 844)}
@@ -105,11 +106,16 @@ def render(url: str, proxy: str | None = None) -> dict:
     """Zwraca {html, status, render: {viewports, viewport_meta}, screenshots: {desktop, phone} (PNG bytes)}."""
     browser = _browser()
     ctx = browser.new_context(user_agent=random_ua(), locale="pl-PL", viewport={"width": 1366, "height": 900},
-                              proxy={"server": proxy} if proxy else None)
+                              proxy={"server": proxy} if proxy else None, accept_downloads=False,
+                              service_workers="block")
+    # ochrona SSRF także dla zasobów ładowanych przez stronę (skrypty, obrazy, fetch, przekierowania)
+    ctx.route("**/*", lambda route: route.continue_() if fetch_allowed(route.request.url) else route.abort("blockedbyclient"))
     page = ctx.new_page()
     try:
         resp = page.goto(url, wait_until="networkidle", timeout=int(config.REQUEST_TIMEOUT * 1500))
         html = page.content()
+        if len(html.encode("utf-8")) > config.MAX_PAGE_BYTES:
+            raise FetchBlocked(f"wyrenderowana strona większa niż {config.MAX_PAGE_BYTES} B: {url}")
         viewports, shots, vp_meta = {}, {}, True
         for name, (w, h) in VIEWPORTS.items():
             page.set_viewport_size({"width": w, "height": h})

@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 
 def evaluate() -> dict:
-    from .db import Document, Finding, get_thresholds, session_scope
+    from .db import Document, get_thresholds, session_scope
 
     out = {}
     with session_scope() as s:

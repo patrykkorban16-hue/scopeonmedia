@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
-import { fmtDateTime, humanize, MODULES, REGISTRY_CATEGORIES, SOURCES, STATUSES } from "../constants.js";
+import { fmtDateTime, humanize, MODULES, REGISTRY_CATEGORIES, safeHref, SOURCES, STATUSES } from "../constants.js";
 import RiskBadge from "./RiskBadge.jsx";
 import RulesTable from "./RulesTable.jsx";
 import StatusSelect from "./StatusSelect.jsx";
@@ -137,7 +137,7 @@ export default function FindingDrawer({ id, version, onClose, onStatusChange, on
               </Field>
               {f.module !== 2 && (
                 <Field label="Podmiot reklamujący / publikujący">
-                  {f.advertiser?.url ? <a href={f.advertiser.url} target="_blank" rel="noreferrer noopener">{f.advertiser.name}</a> : f.advertiser?.name}
+                  {safeHref(f.advertiser?.url) ? <a href={safeHref(f.advertiser.url)} target="_blank" rel="noreferrer noopener">{f.advertiser.name}</a> : f.advertiser?.name}
                   {f.module === 1 && f.advertiser?.is_labeled_ad === false && <span className="tag warn">nieoznaczona reklama</span>}
                   {f.advertiser?.reach && Object.keys(f.advertiser.reach).length > 0 && (
                     <span className="muted small"> · {Object.entries(f.advertiser.reach).map(([k, v]) => `${k}: ${Number(v).toLocaleString("pl-PL")}`).join(", ")}</span>
@@ -145,7 +145,7 @@ export default function FindingDrawer({ id, version, onClose, onStatusChange, on
                 </Field>
               )}
               <Field label="Lokalizacja (URL)">
-                <a href={f.url} target="_blank" rel="noreferrer noopener" className="url">{f.url}</a>
+                <a href={safeHref(f.url)} target="_blank" rel="noreferrer noopener" className="url">{f.url}</a>
                 {f.fetched_url && f.fetched_url !== f.url && <div className="muted small">pobrano z: {f.fetched_url}</div>}
               </Field>
               <Field label="Publikacja / wykrycie / ostatnio widziane">

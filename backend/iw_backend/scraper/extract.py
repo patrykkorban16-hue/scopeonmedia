@@ -12,6 +12,8 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
+from ..security import is_trusted_local, safe_url, same_site
+
 SOCIAL_HOSTS = {"facebook.com": "facebook", "fb.com": "facebook", "instagram.com": "instagram", "tiktok.com": "tiktok",
                 "youtube.com": "youtube", "youtu.be": "youtube", "x.com": "x", "twitter.com": "x", "linkedin.com": "linkedin"}
 
@@ -70,18 +72,21 @@ def _jsonld(soup) -> list[dict]:
 
 def extract_html(html: str, fetched_url: str) -> dict:
     soup = BeautifulSoup(html, "lxml")
+    trusted = is_trusted_local(fetched_url)
     link = soup.find("link", rel=lambda v: v and "canonical" in v)
-    url = urljoin(fetched_url, link["href"]) if link and link.get("href") else fetched_url
+    canonical = safe_url(urljoin(fetched_url, link["href"])) if link and link.get("href") else None
+    # obca witryna nie może „przejąć” adresu innej strony (np. firmy z rejestru); wyjątek: lokalne dane demo
+    url = canonical if canonical and (trusted or same_site(canonical, fetched_url)) else fetched_url
     ld = _jsonld(soup)
     ld_author = next((d.get("author") for d in ld if d.get("author")), None)
     if isinstance(ld_author, list):
         ld_author = ld_author[0] if ld_author else None
     author = _meta(soup, "author", "article:author", "twitter:creator") or (
         ld_author.get("name") if isinstance(ld_author, dict) else ld_author)
-    author_url = ld_author.get("url") if isinstance(ld_author, dict) else None
+    author_url = safe_url(ld_author.get("url")) if isinstance(ld_author, dict) else None
     if not author_url:
         a = soup.find("a", attrs={"rel": "author"})
-        author_url = urljoin(url, a["href"]) if a and a.get("href") else None
+        author_url = safe_url(urljoin(url, a["href"])) if a and a.get("href") else None
     published = (_meta(soup, "article:published_time", "date", "pubdate")
                  or next((d.get("datePublished") or d.get("uploadDate") for d in ld if d.get("datePublished") or d.get("uploadDate")), None))
     if not published:
@@ -89,16 +94,15 @@ def extract_html(html: str, fetched_url: str) -> dict:
         published = t["datetime"] if t else None
     links = []
     for a in soup.find_all("a", href=True):
-        h = a["href"].strip()
-        if not h.startswith(("mailto:", "tel:", "javascript:", "#")):
-            links.append(urljoin(fetched_url, h))
+        h = safe_url(urljoin(fetched_url, a["href"].strip()))
+        if h:
+            links.append(h)
     metrics = {}
     for d in ld:
         for st in (d.get("interactionStatistic") or []):
             if isinstance(st, dict) and st.get("userInteractionCount") is not None:
                 kind = str(st.get("interactionType", "")).split("/")[-1] or "interactions"
                 metrics[kind] = st["userInteractionCount"]
-    gt = soup.find("meta", attrs={"name": "iw-ground-truth"})
     robots = (_meta(soup, "robots") or "").lower()
     html_tag = soup.find("html")
     title = _norm(soup.title.get_text()) if soup.title else _meta(soup, "og:title")
@@ -111,20 +115,36 @@ def extract_html(html: str, fetched_url: str) -> dict:
         "language": ((html_tag.get("lang") if html_tag else None) or "")[:2].lower() or None,
         "links": list(dict.fromkeys(links))[:500], "metrics": metrics,
         "noindex": "noindex" in robots,
-        "ground_truth": json.loads(gt["content"]) if gt and gt.get("content") else {},
+        # etykiety walidacyjne wyłącznie z zaufanego, lokalnego zbioru demo – obca strona nie zafałszuje kalibracji
+        "ground_truth": _ground_truth(soup) if trusted else {},
     }
 
 
-def extract_social_item(item: dict) -> dict:
-    """Post / reklama z API platformy → ten sam format metadanych + tekst do preprocessingu."""
+def _ground_truth(soup) -> dict:
+    gt = soup.find("meta", attrs={"name": "iw-ground-truth"})
+    try:
+        data = json.loads(gt["content"]) if gt and gt.get("content") else {}
+    except (ValueError, TypeError):
+        return {}
+    return {str(k): bool(v) for k, v in data.items() if str(k) in {"1", "2", "3"}} if isinstance(data, dict) else {}
+
+
+def extract_social_item(item: dict, trusted: bool = False) -> dict | None:
+    """Post / reklama z API platformy → ten sam format metadanych + tekst do preprocessingu.
+    `trusted` = dane z lokalnego mocka demo (tylko wtedy przyjmujemy etykiety walidacyjne)."""
+    url = safe_url(item.get("url"))
+    if not url:
+        return None
     text = "\n".join(filter(None, [item.get("title"), item.get("text"), item.get("caption"),
                                    " ".join(item.get("hashtags", []))]))
+    gt = item.get("ground_truth") if trusted and isinstance(item.get("ground_truth"), dict) else {}
     return {
-        "url": item["url"], "fetched_url": item.get("fetched_url", item["url"]), "domain": domain_of(item["url"]),
-        "source_type": item.get("platform") or platform_of(item["url"]), "title": (item.get("title") or text[:140]) or None,
+        "url": url, "fetched_url": safe_url(item.get("fetched_url")) or url, "domain": domain_of(url),
+        "source_type": item.get("platform") or platform_of(url), "title": (item.get("title") or text[:140]) or None,
         "description": None, "site_name": item.get("platform"), "author": item.get("author"),
-        "author_url": item.get("author_url"), "published_at": parse_date(item.get("published_at")),
-        "language": item.get("language"), "links": item.get("links", []), "metrics": item.get("metrics", {}),
-        "ad_meta": item.get("ad_meta"), "noindex": False, "ground_truth": item.get("ground_truth") or {},
+        "author_url": safe_url(item.get("author_url")), "published_at": parse_date(item.get("published_at")),
+        "language": item.get("language"), "links": [u for u in map(safe_url, item.get("links", [])) if u],
+        "metrics": item.get("metrics", {}), "ad_meta": item.get("ad_meta"), "noindex": False,
+        "ground_truth": {str(k): bool(v) for k, v in gt.items() if str(k) in {"1", "2", "3"}},
         "text": text,
     }

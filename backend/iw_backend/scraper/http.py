@@ -1,5 +1,8 @@
 """Klient HTTP silnika scrapingu: rotacja User-Agent i proxy (pula z wyłączaniem niedziałających),
-retry z wykładniczym backoffem, obsługa robots.txt i limitu tempa per domena."""
+retry z wykładniczym backoffem, robots.txt, limit tempa per domena.
+
+Bezpieczeństwo: każdy adres – także każdy cel przekierowania – przechodzi kontrolę SSRF przed wysłaniem
+zapytania (przekierowania obsługujemy ręcznie), a odpowiedzi większe niż IW_MAX_PAGE_BYTES są przerywane."""
 from __future__ import annotations
 
 import itertools
@@ -7,12 +10,13 @@ import logging
 import random
 import threading
 import time
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import httpx
 
 from .. import config
+from ..security import fetch_allowed
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +30,11 @@ USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
 ]
 ROBOTS_AGENT = "ScopeOnMediaBot"
+_DROP_HEADERS = {"content-encoding", "content-length", "transfer-encoding"}
+
+
+class FetchBlocked(Exception):
+    """Adres niedozwolony (SSRF, schemat), odpowiedź za duża albo za dużo przekierowań – bez ponawiania."""
 
 
 def random_ua() -> str:
@@ -72,7 +81,8 @@ class Fetcher:
 
     def _client(self, proxy: str | None) -> httpx.Client:
         if proxy not in self._clients:
-            self._clients[proxy] = httpx.Client(proxy=proxy, timeout=config.REQUEST_TIMEOUT, follow_redirects=True)
+            # przekierowania ręcznie (każdy cel przechodzi kontrolę SSRF)
+            self._clients[proxy] = httpx.Client(proxy=proxy, timeout=config.REQUEST_TIMEOUT, follow_redirects=False)
         return self._clients[proxy]
 
     def next_proxy(self) -> str | None:
@@ -85,7 +95,7 @@ class Fetcher:
         base = f"{u.scheme}://{u.netloc}"
         if base not in self._robots:
             try:
-                r = self._client(None).get(base + "/robots.txt", headers=headers(), timeout=8)
+                r = self.get(base + "/robots.txt", retries=1)
                 rp = RobotFileParser()
                 rp.parse(r.text.splitlines() if r.status_code == 200 else [])
                 self._robots[base] = rp
@@ -100,18 +110,41 @@ class Fetcher:
             time.sleep(wait)
         self._last[host] = time.time()
 
+    def _get_once(self, url: str, extra_headers: dict | None, proxy: str | None) -> httpx.Response:
+        client = self._client(proxy)
+        current = url
+        for _ in range(config.MAX_REDIRECTS + 1):
+            if not fetch_allowed(current):
+                raise FetchBlocked(f"adres niedozwolony (sieć prywatna/lokalna lub schemat): {current}")
+            self._throttle(urlparse(current).netloc)
+            with client.stream("GET", current, headers={**headers(), **(extra_headers or {})}) as r:
+                if r.is_redirect and r.headers.get("location"):
+                    current = urljoin(current, r.headers["location"])
+                    continue
+                if r.status_code in (429, 502, 503, 504):
+                    raise httpx.HTTPStatusError(f"HTTP {r.status_code}", request=r.request, response=r)
+                if int(r.headers.get("content-length") or 0) > config.MAX_PAGE_BYTES:
+                    raise FetchBlocked(f"odpowiedź większa niż {config.MAX_PAGE_BYTES} B: {current}")
+                body = bytearray()
+                for chunk in r.iter_bytes():
+                    body += chunk
+                    if len(body) > config.MAX_PAGE_BYTES:
+                        raise FetchBlocked(f"odpowiedź większa niż {config.MAX_PAGE_BYTES} B: {current}")
+                kept = [(k, v) for k, v in r.headers.multi_items() if k.lower() not in _DROP_HEADERS]
+                return httpx.Response(r.status_code, headers=kept, content=bytes(body), request=r.request)
+        raise FetchBlocked(f"za dużo przekierowań: {url}")
+
     def get(self, url: str, *, params: dict | None = None, extra_headers: dict | None = None,
             retries: int = 3) -> httpx.Response:
-        host = urlparse(url).netloc
+        if params:
+            url = str(httpx.URL(url, params=params))
         last: Exception | None = None
         for attempt in range(retries):
             proxy = self.pool.next()
-            self._throttle(host)
             try:
-                r = self._client(proxy).get(url, params=params, headers={**headers(), **(extra_headers or {})})
-                if r.status_code in (429, 502, 503, 504):
-                    raise httpx.HTTPStatusError(f"HTTP {r.status_code}", request=r.request, response=r)
-                return r
+                return self._get_once(url, extra_headers, proxy)
+            except FetchBlocked:
+                raise
             except Exception as exc:
                 last = exc
                 self.pool.mark_bad(proxy)

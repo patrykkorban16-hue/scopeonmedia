@@ -14,6 +14,7 @@ import CalibrationPanel from "./components/CalibrationPanel.jsx";
 import SourcesPanel from "./components/SourcesPanel.jsx";
 import AlertToasts from "./components/AlertToasts.jsx";
 import PageTitle from "./components/PageTitle.jsx";
+import Login from "./components/Login.jsx";
 
 const DEFAULT_FILTERS = {
   modules: [],
@@ -33,7 +34,31 @@ const TABS = [
   { id: "sources", label: "Źródła, zadania, rejestr" },
 ];
 
+// Bramka logowania: dashboard (z WebSocketem i zapytaniami) montuje się dopiero po zalogowaniu.
 export default function App() {
+  const [authed, setAuthed] = useState(null);       // null = sprawdzanie sesji
+
+  useEffect(() => {
+    api.me().then((r) => setAuthed(Boolean(r.authenticated))).catch(() => setAuthed(false));
+    const onUnauthorized = () => setAuthed(false);
+    window.addEventListener("iw:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("iw:unauthorized", onUnauthorized);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } finally {
+      setAuthed(false);
+    }
+  }, []);
+
+  if (authed === null) return <div className="empty">Ładowanie…</div>;
+  if (!authed) return <Login onSuccess={() => setAuthed(true)} />;
+  return <Dashboard onLogout={logout} />;
+}
+
+function Dashboard({ onLogout }) {
   const [tab, setTab] = useState("incidents");
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [sort, setSort] = useState("score");
@@ -116,7 +141,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header connected={connected} health={health} lastJob={lastJob} filters={appliedFilters}
+      <Header connected={connected} health={health} lastJob={lastJob} filters={appliedFilters} onLogout={onLogout}
         onRun={() => api.runJob({ kind: "all" }).catch((e) => setError(e.message))} />
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
       {error && (

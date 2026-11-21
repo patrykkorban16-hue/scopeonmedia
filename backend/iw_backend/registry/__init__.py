@@ -64,7 +64,7 @@ def upsert(rows: list[dict], source: str) -> int:
 def _bump_version(s) -> str:
     rows = [(e.id, e.name, e.category, e.authorized, tuple(e.aliases), tuple(e.domains), tuple(e.social_handles))
             for e in s.scalars(select(Entity).order_by(Entity.id))]
-    v = hashlib.sha1(json.dumps(rows, default=str).encode()).hexdigest()[:12]
+    v = hashlib.blake2b(json.dumps(rows, default=str).encode(), digest_size=6).hexdigest()
     put_setting(s, "registry_version", v)
     return v
 

@@ -1,0 +1,11 @@
+# Analiza statyczna Pythona (CI: .github/workflows/security.yml): błędy (F, E9), bugbear (B), bandit (S).
+target-version = "py312"
+line-length = 130
+
+[lint]
+select = ["F", "E9", "B", "S"]
+# S101 assert w testach, S311 random tylko do rotacji User-Agent, S603/S607 brak subprocess z wejścia, B008 Query() FastAPI
+ignore = ["S101", "S311", "S603", "S607", "B008"]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106"]

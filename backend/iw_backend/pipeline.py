@@ -19,6 +19,13 @@ NEAR_DUP_BITS = 3
 # Moduły, w których ocena LLM współtworzy score. M2: tylko opinia doradcza – kryteria 4–8 dotyczą prezentacji
 # wizualnej (czcionka, kontrast, ukrycie, responsywność), której model tekstowy nie widzi.
 LLM_BLEND_MODULES = {1, 3}
+INJECTION_REASON = {"rule": "llm:prompt_injection", "label": "treść próbuje sterować modelem AI (prompt injection)",
+                    "evidence": "ocena LLM pominięta – materiał wymaga ręcznej weryfikacji", "weight": 0.0}
+
+
+def blend_llm(rule_score: float, p: float, weight: float, max_decrease: float) -> float:
+    """Ta sama formuła co w silniku AI: LLM podnosi wynik swobodnie, obniża najwyżej o max_decrease."""
+    return max((1 - weight) * rule_score + weight * p, rule_score - max_decrease)
 _llm_cache = {"at": 0.0, "ok": False}
 
 
@@ -133,11 +140,13 @@ def analyze_document(doc_id: int) -> tuple[list[dict], list[int]]:
                 s.add(f)
             f.category, f.rule_score = uf["category"], uf["rule_score"]
             # ponowna analiza zachowuje wcześniejszą ocenę LLM (ta sama formuła mieszania co w silniku AI)
-            w = float((f.llm or {}).get("weight") or 0.0)
-            f.score = uf["score"] if (f.llm_score is None or m not in LLM_BLEND_MODULES) else \
-                round((1 - w) * uf["rule_score"] + w * f.llm_score, 4)
+            llm = f.llm or {}
+            f.score = uf["score"] if (f.llm_score is None or m not in LLM_BLEND_MODULES) else round(blend_llm(
+                uf["rule_score"], f.llm_score, float(llm.get("weight") or 0.0), float(llm.get("max_decrease") or 0.0)), 4)
             f.firm, f.advertiser, f.entity = uf.get("firm") or {}, uf.get("advertiser") or {}, uf.get("entity") or {}
             f.excerpt, f.reasons, f.rules, f.details = uf["excerpt"][:3000], uf["reasons"], uf["rules"], uf["details"]
+            if llm.get("status") == "skipped_injection":
+                f.reasons = [*f.reasons, INJECTION_REASON]
             f.event_date = doc.published_at or doc.first_seen_at
             gt = (doc.ground_truth or {}).get(str(m))
             f.ground_truth = None if gt is None else bool(gt)
@@ -181,8 +190,13 @@ def llm_review(finding_id: int) -> list[dict]:
             if blend:
                 f.score = r["score"]
             f.llm = {"status": "done", "model": r.get("model"), "probability": r["probability"],
-                     "weight": r.get("weight") if blend else 0.0, "advisory": not blend,
-                     "reasons": r.get("reasons", []), "at": utcnow().isoformat()}
+                     "weight": r.get("weight") if blend else 0.0, "max_decrease": r.get("max_decrease") or 0.0,
+                     "advisory": not blend, "reasons": r.get("reasons", []), "at": utcnow().isoformat()}
+        elif r.get("injection_suspected"):
+            # treść próbuje sterować modelem – LLM pominięty, a fakt próby trafia do analityka jako sygnał
+            f.llm = {"status": "skipped_injection", "error": r.get("error")}
+            if not any(x.get("rule") == INJECTION_REASON["rule"] for x in f.reasons):
+                f.reasons = [*f.reasons, INJECTION_REASON]
         else:
             f.llm = {"status": "unavailable", "error": r.get("error")}
         s.flush()

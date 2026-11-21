@@ -14,16 +14,17 @@ from pathlib import Path
 
 import numpy as np
 import socketio
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 
-from . import __version__, ai_client, config, registry
+from . import __version__, ai_client, auth, config, registry
 from .db import (Content, CrawlJob, Document, Entity, Finding, StatusHistory, get_setting, get_thresholds, high_cut,
                  init_db, risk_level, session_scope, set_threshold, utcnow)
+from .security import csv_safe, fetch_allowed
 from .serializers import MODULE_NAMES, finding_dict, iso
 from .storage import get_storage
 
@@ -37,6 +38,7 @@ DEMO_DIR = Path(__file__).parent / "demo"
 @asynccontextmanager
 async def lifespan(_app):
     config.require_internal_token()
+    config.require_dashboard_password()
     init_db()
     with session_scope() as s:
         empty = not s.scalar(select(func.count()).select_from(Entity))
@@ -51,6 +53,16 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_meth
                    allow_headers=["Content-Type"])
 (DEMO_DIR / "sites").mkdir(parents=True, exist_ok=True)
 app.mount("/demo/sites", StaticFiles(directory=DEMO_DIR / "sites", html=True), name="demo-sites")
+PUBLIC_API = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    """Całe /api/* wymaga zalogowania (poza logowaniem). /internal/* – token serwisowy, /demo/* – dane demo."""
+    if request.url.path.startswith("/api/") and request.url.path not in PUBLIC_API \
+            and not auth.valid_session(request.cookies.get(auth.COOKIE)):
+        return JSONResponse({"detail": "wymagane logowanie"}, status_code=401)
+    return await call_next(request)
 
 
 def _check_internal(token: str) -> None:
@@ -62,7 +74,37 @@ def _date(v: str | None) -> datetime | None:
     try:
         return datetime.fromisoformat(v) if v else None
     except ValueError:
-        raise HTTPException(400, f"nieprawidłowa data: {v}")
+        raise HTTPException(400, f"nieprawidłowa data: {v}") from None
+
+
+# ------------------------------------------------------------------------------ logowanie
+class LoginBody(BaseModel):
+    password: str = Field(max_length=256)
+
+
+@app.post("/api/auth/login")
+def login(body: LoginBody, request: Request, response: Response):
+    client = request.client.host if request.client else "?"
+    if auth.rate_limited(client):
+        raise HTTPException(429, "za dużo nieudanych prób – odczekaj 5 minut")
+    if not auth.check_password(body.password):
+        auth.record_failure(client)
+        raise HTTPException(401, "nieprawidłowe hasło")
+    auth.clear_failures(client)
+    response.set_cookie(auth.COOKIE, auth.make_session(), max_age=auth.SESSION_TTL, httponly=True,
+                        samesite="strict", secure=request.url.scheme == "https", path="/")
+    return {"authenticated": True}
+
+
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(auth.COOKIE, path="/")
+    return {"authenticated": False}
+
+
+@app.get("/api/auth/me")
+def me(request: Request):
+    return {"authenticated": auth.valid_session(request.cookies.get(auth.COOKIE))}
 
 
 # ------------------------------------------------------------------------------ filtry
@@ -412,14 +454,15 @@ def export(module: list[int] = Query(default=[]), risk: list[str] = Query(defaul
                 "fragment treści"])
     for i in items:
         e = i.get("entity") or {}
-        w.writerow([i["id"], i["module"], i["category"], i["score"], i["risk_level"], i["status"],
+        # csv_safe: treść ze stron nie może zaczynać się od =,+,-,@ (wykonałaby się jako formuła w Excelu)
+        w.writerow([csv_safe(v) for v in [i["id"], i["module"], i["category"], i["score"], i["risk_level"], i["status"],
                     (i.get("firm") or {}).get("name"), (i.get("firm") or {}).get("category"),
                     (i.get("advertiser") or {}).get("name"), (i.get("advertiser") or {}).get("url"),
                     (i.get("advertiser") or {}).get("is_labeled_ad"), i["url"], i["source_type"], i.get("published_at"),
                     i["first_seen_at"], i["last_seen_at"], i["availability"], ", ".join(e.get("nip", [])),
                     ", ".join(e.get("krs", [])), ", ".join(e.get("emails", [])),
                     ", ".join(r["id"] for r in i.get("rules", []) if r["status"] == "fail"),
-                    i["excerpt"].replace("\n", " ")[:600]])
+                    i["excerpt"].replace("\n", " ")[:600]]])
     return StreamingResponse(iter(["﻿" + buf.getvalue()]), media_type="text/csv; charset=utf-8",
                              headers={"Content-Disposition": "attachment; filename=scopeonmedia_raport.csv"})
 
@@ -429,7 +472,7 @@ def rules_catalog():
     try:
         return ai_client.rules()
     except Exception:
-        raise HTTPException(503, "silnik AI niedostępny")
+        raise HTTPException(503, "silnik AI niedostępny") from None
 
 
 @app.get("/api/documents/{doc_id}/screenshot/{viewport}")
@@ -453,6 +496,14 @@ class JobBody(BaseModel):
     sources: list[str] = Field(default_factory=list)
 
 
+def _require_fetchable(url: str) -> None:
+    """Ochrona SSRF dla adresów wpisanych w dashboardzie: tylko http(s) i tylko adresy publiczne
+    (lub hosty z IW_TRUSTED_LOCAL_HOSTS)."""
+    if not fetch_allowed(url):
+        raise HTTPException(400, f"Adres niedozwolony: {url[:200]} – dozwolone są publiczne adresy http(s); "
+                                 "sieć lokalna i prywatna jest zablokowana")
+
+
 @app.post("/api/jobs")
 def enqueue(body: JobBody):
     from . import tasks
@@ -461,11 +512,13 @@ def enqueue(body: JobBody):
     queued: list[str] = []
     if body.kind in ("all", "web"):
         for seed in ([{"url": body.url}] if body.url else seeds.get("web", [])):
-            if not str(seed["url"]).startswith(("http://", "https://")):
-                raise HTTPException(400, "URL musi zaczynać się od http(s)://")
+            if body.url:
+                _require_fetchable(body.url)
             tasks.task_web(seed)
             queued.append(f"web: {seed['url']}")
     if body.kind == "urls" or (body.kind == "all" and seeds.get("urls")):
+        for u in body.urls:
+            _require_fetchable(u)
         urls = body.urls or seeds.get("urls", [])
         if urls:
             tasks.task_urls(urls)
@@ -560,7 +613,9 @@ async def internal_events(body: EventsBody, x_internal_token: str = Header(defau
 
 
 @sio.event
-async def connect(sid, environ, auth=None):
+async def connect(sid, environ, _auth=None):
+    if not auth.valid_session(auth.cookie_from_environ(environ)):
+        raise socketio.exceptions.ConnectionRefusedError("wymagane logowanie")
     with session_scope() as s:
         await sio.emit("thresholds", get_thresholds(s), to=sid)
 

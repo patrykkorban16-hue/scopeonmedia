@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
-import { fmtDate, humanize, MODULES, REGISTRY_CATEGORIES, RULE_STATUS, SOURCES } from "../constants.js";
+import { fmtDate, humanize, MODULES, REGISTRY_CATEGORIES, RULE_STATUS, safeHref, SOURCES } from "../constants.js";
 import RiskBadge from "./RiskBadge.jsx";
 
 function useReport(module, version) {
@@ -36,7 +36,7 @@ function M1Report({ data, onOpen }) {
           <tbody>
             {g.advertisers.flatMap((a) => a.ads.map((ad, i) => (
               <tr key={ad.finding_id} onClick={() => onOpen(ad.finding_id)}>
-                <td>{i === 0 ? (a.url ? <a href={a.url} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}>{a.name}</a> : a.name) : ""}</td>
+                <td>{i === 0 ? (safeHref(a.url) ? <a href={safeHref(a.url)} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}>{a.name}</a> : a.name) : ""}</td>
                 <td>{SOURCES[a.platform] || a.platform}</td>
                 <td className="url small">{ad.url}</td>
                 <td><RiskBadge level={ad.risk_level} score={ad.score} /></td>

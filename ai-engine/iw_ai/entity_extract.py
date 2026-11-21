@@ -29,7 +29,7 @@ def _valid_nip(nip: str) -> bool:
     if len(d) != 10:
         return False
     w = [6, 5, 7, 2, 3, 4, 5, 6, 7]
-    return sum(a * b for a, b in zip(w, d[:9])) % 11 == d[9]
+    return sum(a * b for a, b in zip(w, d[:9], strict=True)) % 11 == d[9]
 
 
 def extract_entity(text: str, fallback_name: str | None) -> EntityData:
