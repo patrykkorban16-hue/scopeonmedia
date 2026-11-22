@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from iw_backend.db import high_cut, risk_level
 from iw_backend.registry import derive_aliases
-from iw_backend.registry.knf import BRANDS_FILE, apply_brands, parse_page
+from iw_backend.registry.knf import BRANDS_FILE, apply_brands, parse_agents, parse_page
 from iw_backend.scraper.extract import extract_html, extract_social_item, platform_of
 
 KNF_SAMPLE = """
@@ -36,6 +36,28 @@ def test_knf_brands_add_aliases_and_domains():
     # każda nazwa w brands.json występuje tylko raz (inaczej marka trafiłaby do złej firmy)
     names = [n.casefold() for b in json.loads(BRANDS_FILE.read_text(encoding="utf-8"))["brands"] for n in b["register_names"]]
     assert len(names) == len(set(names))
+
+
+AGENTS_SAMPLE = """
+<table><tbody>
+<tr><th>Imię i nazwisko agenta firmy inwestycyjnej</th><td>Jan Przykładowy</td></tr>
+<tr><th>Data uzyskania wpisu do rejestru</th><td>01-02-2020</td></tr>
+<tr><th>Nazwa firmy inwestycyjnej</th><td>Dom Inwestycyjny Xelion sp. z o.o.</td></tr>
+</tbody></table>
+<table><tbody>
+<tr><th>Nazwa</th><td>Agent Przykładowy S.A.</td></tr>
+<tr><th>Nazwa firmy inwestycyjnej na rzecz której działa agent</th><td>EVO Dom Maklerski S.A.</td></tr>
+<tr><th>Dane Teleadresowe</th><td>ul. Testowa 1, 00-001 Warszawa</td></tr>
+</tbody></table>
+"""
+
+
+def test_knf_agents_parser_uses_agent_name_not_principal():
+    rows = parse_agents(AGENTS_SAMPLE)
+    assert [r["name"] for r in rows] == ["Jan Przykładowy", "Agent Przykładowy S.A."]
+    assert all(r["category"] == "agent_firmy_inwestycyjnej" and r["authorized"] for r in rows)
+    assert rows[0]["scope"] == "agent: Dom Inwestycyjny Xelion sp. z o.o." and rows[0]["license_date"] == "01-02-2020"
+    assert rows[1]["address"].startswith("ul. Testowa")
 
 
 def test_derive_aliases_strips_legal_form():

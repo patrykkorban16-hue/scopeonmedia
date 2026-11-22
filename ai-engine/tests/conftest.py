@@ -19,6 +19,8 @@ REGISTRY = {"version": "test", "entities": [
      "category": "bank_maklerski", "authorized": True},
     {"id": 3, "name": "GoldStar Capital Partners", "aliases": [], "domains": ["goldstar-capital.test"],
      "category": "ostrzezenie_knf", "authorized": False},
+    {"id": 4, "name": "Jan Kowalski", "aliases": [], "domains": ["agent-kowalski.test"],
+     "category": "agent_firmy_inwestycyjnej", "authorized": True},
 ]}
 
 

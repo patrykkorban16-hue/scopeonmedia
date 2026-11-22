@@ -130,3 +130,20 @@ def test_m3_skips_authorized_investment_firm():
     text = "Indywidualne rekomendacje inwestycyjne i dobór akcji do Twojej sytuacji."
     f, _ = run("https://vistula-dm.test/doradztwo", text=text)
     assert 3 not in f
+
+
+def test_m3_skips_registered_agent_of_investment_firm():
+    text = "Indywidualne rekomendacje inwestycyjne i dobór akcji do Twojej sytuacji. Umów spotkanie."
+    f, _ = run("https://agent-kowalski.test/oferta", text=text)
+    assert 3 not in f
+
+
+def test_m3_hold_recommendation_and_full_instrument_catalogue():
+    # art. 76: także rekomendacja powstrzymania się od transakcji; art. 2: instrumenty rynku pieniężnego, uprawnienia do emisji
+    text = ("Indywidualna strategia dopasowana do Twojej sytuacji: zalecamy wstrzymanie się z zakupem, "
+            "a bony skarbowe i uprawnienia do emisji CO2 dobierzemy do Twojego portfela. Abonament 200 zł miesięcznie.")
+    f, _ = run("https://doradca-emisje.test/vip", text=text)
+    labels = {r.label for r in f[3].reasons}
+    assert "rekomendacje trzymania / powstrzymania się" in labels
+    assert {"instrumenty rynku pieniężnego", "uprawnienia do emisji"} <= labels
+    assert f[3].details["definition_art76"]["C_instrument_finansowy"] and f[3].score > 0.6

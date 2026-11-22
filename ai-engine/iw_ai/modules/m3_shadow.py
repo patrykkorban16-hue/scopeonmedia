@@ -31,12 +31,17 @@ RECOMMEND = compile_patterns([  # B
     ("dobór instrumentów", r"dobier\w* (dla (ciebie|pana|pani|panstwa) )?(instrument|akcj|obligacj|fundusz|etf|spol|aktyw)\w*|dobor\w* (instrument|akcj|spolek|funduszy|etf|aktyw)\w*|wskazemy,? (ktore|jakie) (akcje|fundusze|etf|instrumenty)", 1.4),
     ("sygnały transakcyjne / copy trading", r"sygnal\w* (transakcyjn|kupna|sprzedazy|inwestycyjn)\w*|kopiuj\w* (moje )?transakcj\w*|copy ?trading|alerty (kupna|sprzedazy)", 1.5),
     ("zarządzanie / przebudowa portfela", r"zarzadza\w* (twoim |panstwa |pana |pani )?(portfel|majatk|aktyw|kapital|oszczednosc)\w*|(przebudow|optymalizacj|rebalans|alokacj)\w* (twojego |panstwa )?(portfel|aktyw|kapital)\w*", 1.3),
+    # art. 76 u.o.i.f.: także rekomendacja powstrzymania się od transakcji (trzymaj / nie sprzedawaj / wstrzymaj zakup)
+    ("rekomendacje trzymania / powstrzymania się", r"(rekomendujemy|zalecamy|radzimy|doradzamy|sugerujemy) (dalsze )?(trzymanie|wstrzymanie sie|powstrzymanie sie)|(wstrzymaj|powstrzymaj)\w* sie (z|od) (zakup|sprzedaz|kupn|transakcj|inwestowan)\w*|(nie sprzedawaj|nie kupuj)\w* (teraz |jeszcze |tych |tej )?(akcj|obligacj|jednost|etf|spolk)\w*", 1.4),
 ])
 INSTRUMENTS = compile_patterns([  # C – art. 2 i 3 u.o.i.f.
     ("papiery wartościowe (akcje, obligacje, warranty, certyfikaty)", r"\b(akcj\w*|obligacj\w*|warrant\w*|praw\w* poboru|certyfikat\w* inwestycyjn\w*|list\w* zastawn\w*|kwit\w* depozytow\w*|spolk\w* gieldow\w*)\b", 1.0),
     ("tytuły uczestnictwa (fundusze, ETF)", r"\b(etf\w*|jednost\w* uczestnictwa|fundusz\w* inwestycyjn\w*|fundusz\w*)\b", 0.9),
     ("instrumenty pochodne / CFD", r"\b(cfd|kontrakt\w* (terminow|na roznic)\w*|opcj\w*|swap\w*|instrument\w* pochodn\w*|futures)\b", 1.0),
     ("instrumenty finansowe (ogólnie)", r"instrument\w* finansow\w*|papier\w* wartosciow\w*", 0.8),
+    ("instrumenty rynku pieniężnego", r"instrument\w* rynku pienieznego|bon\w* skarbow\w*|bon\w* pieniezn\w*|papier\w* komercyjn\w*|certyfikat\w* depozytow\w*", 0.9),
+    ("uprawnienia do emisji", r"uprawnie\w* do emisji|\beua\b|emisj\w* co2", 0.9),
+    ("prawa pochodne, prawa do akcji", r"praw\w* (pochodn|do akcji)\w*|\bpda\b|bankow\w* (papier|praw)\w* (wartosciow|pochodn)\w*|credit default swap|\bcds\b", 0.8),
 ])
 NON_INSTRUMENTS = re.compile(r"kryptowalut\w*|kryptoaktyw\w*|bitcoin\w*|\bbtc\b|ethereum|altcoin\w*|token\w*|nft\b|"
                              r"zloto fizyczn\w*|sztabk\w*|nieruchomos\w*|monet\w* kolekcjon", re.I)
@@ -62,8 +67,8 @@ def _sum(hits, cap):
 
 
 def analyze(ctx: Ctx) -> UnifiedFinding | None:
-    if ctx.owner is not None and ctx.owner.is_investment_firm:
-        return None                                   # autoryzowana firma inwestycyjna – poza zakresem
+    if ctx.owner is not None and (ctx.owner.is_investment_firm or ctx.owner.is_registered_agent):
+        return None                                   # autoryzowana firma inwestycyjna albo jej agent (rejestr KNF) – poza zakresem
     A = find_hits(PERSONAL, ctx.folded, "A", display=ctx.display)
     B = find_hits(RECOMMEND, ctx.folded, "B", display=ctx.display)
     S = find_hits(SERVICE, ctx.folded, "svc", display=ctx.display)

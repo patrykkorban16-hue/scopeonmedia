@@ -30,6 +30,7 @@ export const REGISTRY_CATEGORIES = {
   oddzial_zagranicznej_firmy: "Oddział zagranicznej firmy",
   zagraniczna_firma_transgraniczna: "Firma zagraniczna (transgranicznie)",
   ostrzezenie_knf: "Lista ostrzeżeń KNF",
+  agent_firmy_inwestycyjnej: "Agent firmy inwestycyjnej",
   brak_w_rejestrze: "Brak w rejestrze",
 };
 

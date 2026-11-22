@@ -17,6 +17,7 @@ CATEGORIES = {
     "oddzial_zagranicznej_firmy": "Oddział zagranicznej firmy inwestycyjnej",
     "zagraniczna_firma_transgraniczna": "Zagraniczna firma inwestycyjna (bez oddziału)",
     "ostrzezenie_knf": "Lista ostrzeżeń publicznych KNF",
+    "agent_firmy_inwestycyjnej": "Agent firmy inwestycyjnej",
 }
 LEGAL_FORMS = re.compile(r"\b(s\.?\s?a\.?|sp\.?\s?z\s?o\.?\s?o\.?|spółka akcyjna|spółka z ograniczoną odpowiedzialnością|"
                          r"sp\.?\s?k\.?|ltd\.?|limited|plc|gmbh|ag|se|n\.?v\.?|b\.?v\.?|s\.?a\.?r\.?l\.?|a\.?s\.?|"
