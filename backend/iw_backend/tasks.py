@@ -1,6 +1,7 @@
 """Kolejka zadań (Huey – open source; SQLite lokalnie, Redis w Dockerze) + harmonogram typu CronJob.
 
-Worker:  huey_consumer iw_backend.tasks.huey -w 4 -k thread
+Worker:  huey_consumer iw_backend.tasks.huey -w 4 -k thread -f -L llm-review,llm-requeue
+         (-f -L: zdjęcie blokad po zadaniach przerwanych restartem workera)
 Priorytety: zbieranie i analiza (10) > ponowne odwiedziny (5) > ocena LLM (1, najwolniejsza).
 """
 from __future__ import annotations
@@ -9,6 +10,7 @@ import json
 import logging
 
 from huey import PriorityRedisHuey, SqliteHuey, crontab
+from huey.exceptions import TaskLockedException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -310,6 +312,29 @@ def _close_interrupted_jobs() -> int:
         return len(stale)
 
 
+def _requeue_lost_llm_reviews() -> int:
+    """Oceny LLM „queued”/„running” bez zadania w kolejce Huey zgubił restart workera – bez ponownego
+    zlecenia wisiałyby w dashboardzie jako „w kolejce…”, a API nie pozwala ich zlecić ręcznie.
+    on_startup działa w każdym wątku workera: blokada + znacznik startu → każda ocena zlecona raz."""
+    marker = _STARTED_AT.isoformat()
+    try:
+        with huey.lock_task("llm-requeue"):
+            in_queue = {t.args[0] for t in [*huey.pending(), *huey.scheduled()]
+                        if t.name.endswith("task_llm_review") and t.args}
+            with session_scope() as s:
+                lost = [f for f in s.scalars(select(Finding))
+                        if (f.llm or {}).get("status") in ("queued", "running")
+                        and f.llm.get("requeued") != marker and f.id not in in_queue]
+                for f in lost:
+                    f.llm = {"status": "queued", "requeued": marker}
+                ids = [f.id for f in lost]
+    except TaskLockedException:     # inny wątek tego workera właśnie to robi
+        return 0
+    for fid in ids:
+        task_llm_review(fid)
+    return len(ids)
+
+
 @huey.on_startup()
 def on_worker_start():
     try:
@@ -317,4 +342,9 @@ def on_worker_start():
             log.info("zamknięto %d przerwanych zadań", n)
     except Exception:   # start workera nie może zależeć od porządków w historii zadań
         log.exception("nie udało się zamknąć przerwanych zadań")
+    try:
+        if n := _requeue_lost_llm_reviews():
+            log.info("ponownie zlecono %d ocen LLM zgubionych przy restarcie", n)
+    except Exception:
+        log.exception("nie udało się ponownie zlecić ocen LLM")
     _heartbeat()
