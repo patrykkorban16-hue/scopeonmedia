@@ -52,7 +52,7 @@ Start-Process -FilePath (Join-Path $root "ai-engine\.venv\Scripts\python.exe") -
 Start-Process -FilePath $bpy -ArgumentList "-m", "uvicorn", "iw_backend.api:asgi", "--port", "8000" -WorkingDirectory (Join-Path $root "backend") -WindowStyle Minimized
 for ($i = 0; $i -lt 40; $i++) { try { Invoke-RestMethod http://127.0.0.1:8000/api/health -TimeoutSec 2 | Out-Null; break } catch { Start-Sleep 1 } }
 Push-Location (Join-Path $root "backend"); & $bpy -m iw_backend.cli init; Pop-Location
-Start-Process -FilePath (Join-Path $root "backend\.venv\Scripts\huey_consumer.exe") -ArgumentList "iw_backend.tasks.huey", "-w", "3", "-k", "thread" -WorkingDirectory (Join-Path $root "backend") -WindowStyle Minimized
+Start-Process -FilePath (Join-Path $root "backend\.venv\Scripts\huey_consumer.exe") -ArgumentList "iw_backend.tasks.huey", "-w", "3", "-k", "thread", "-f", "-L", "llm-review,llm-requeue" -WorkingDirectory (Join-Path $root "backend") -WindowStyle Minimized
 Start-Process -FilePath "C:\Program Files\nodejs\node.exe" -ArgumentList "node_modules/vite/bin/vite.js", "--port", "5173" -WorkingDirectory (Join-Path $root "frontend") -WindowStyle Minimized
 
 if ($firstRun) {

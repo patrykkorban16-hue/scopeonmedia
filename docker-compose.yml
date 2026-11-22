@@ -116,7 +116,9 @@ services:
     restart: unless-stopped
     env_file: .env
     environment: *backend-env
-    command: ["huey_consumer", "iw_backend.tasks.huey", "-w", "4", "-k", "thread"]
+    # -f -L llm-review: przy starcie zdejmuje blokady po zadaniach przerwanych restartem
+    # (blokada llm-review powstaje w trakcie zadania, więc -f bez -L jej nie widzi)
+    command: ["huey_consumer", "iw_backend.tasks.huey", "-w", "4", "-k", "thread", "-f", "-L", "llm-review,llm-requeue"]
     depends_on:
       api: {condition: service_healthy}
 
