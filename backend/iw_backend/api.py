@@ -351,7 +351,9 @@ def report_m1():
             adv = f.advertiser or {}
             a = g["advertisers"].setdefault(adv.get("name") or d.domain, {
                 "name": adv.get("name") or d.domain, "url": adv.get("url"), "platform": d.source_type, "ads": []})
-            a["ads"].append({"finding_id": f.id, "url": d.url, "score": f.score, "risk_level": risk_level(f.score, th[1]),
+            # treść reklamy – wymagane pole wyniku M1 (obok danych firmy, reklamującego i URL)
+            a["ads"].append({"finding_id": f.id, "url": d.url, "title": d.title, "content": f.excerpt,
+                             "score": f.score, "risk_level": risk_level(f.score, th[1]),
                              "labeled": adv.get("is_labeled_ad"), "first_seen_at": iso(d.first_seen_at),
                              "last_seen_at": iso(d.last_seen_at), "availability": d.availability, "status": f.status,
                              "affiliate": bool((f.details or {}).get("affiliate_links"))})
