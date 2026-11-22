@@ -27,6 +27,9 @@ SOURCES = {
     "notyfikowane_firmy_inwestycyjne_oddzialy": "oddzial_zagranicznej_firmy",
     "notyfikowane_zagraniczne_firmy_inwestycyjne": "zagraniczna_firma_transgraniczna",
 }
+# agenci firm inwestycyjnych działają legalnie w imieniu firmy – M3 (shadow advisory) ich wyklucza
+AGENT_CATEGORY = "agent_firmy_inwestycyjnej"
+AGENT_SOURCES = ("agenci_firm_inwestycyjnych_osoby_fizyczne", "agenci_firm_inwestycyjnych_osoby_prawne")
 
 
 def _clean(s: str) -> str:
@@ -95,27 +98,62 @@ def _get_page(fetcher: Fetcher, url: str):
     return None
 
 
+def parse_agents(html: str) -> list[dict]:
+    """Rejestr agentów firm inwestycyjnych (osoby fizyczne i prawne) – inne pola niż w rejestrze firm:
+    nazwa agenta to „Imię i nazwisko agenta…” albo „Nazwa”, a „Nazwa firmy inwestycyjnej…” to firma, dla której działa."""
+    soup = BeautifulSoup(html, "lxml")
+    out = []
+    for table in soup.find_all("table"):
+        fields: dict[str, str] = {}
+        for tr in table.find_all("tr"):
+            th, td = tr.find("th"), tr.find("td")
+            if th and td:
+                fields[_clean(th.get_text(" ", strip=True)).lower()] = _clean(td.get_text(" ", strip=True))
+        name = next((v for k, v in fields.items() if k.startswith("imię i nazwisko") or k == "nazwa"), "")
+        principal = next((v for k, v in fields.items() if k.startswith("nazwa firmy inwestycyjnej")), "")
+        if not name:
+            continue
+        out.append({
+            "name": name, "aliases": [], "category": AGENT_CATEGORY, "authorized": True, "country": "PL",
+            "address": fields.get("dane teleadresowe")[:400] if fields.get("dane teleadresowe") else None,
+            "license_date": next((v[:20] for k, v in fields.items() if k.startswith("data")), None),
+            "scope": f"agent: {principal}"[:200] if principal else "agent firmy inwestycyjnej",
+            "register_id": f"KNF:agent:{name[:60]}",
+        })
+    return out
+
+
+def _import_list(fetcher: Fetcher, path: str, category: str, parse, max_pages: int, delay_s: float) -> list[dict]:
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for page in range(1, max_pages + 1):
+        url = BASE + path + (f"?page={page}" if page > 1 else "")
+        r = _get_page(fetcher, url)
+        if r is None or r.status_code != 200:   # zapisujemy to, co udało się pobrać (upsert nie usuwa starych wpisów)
+            log.warning("KNF %s: import przerwany na stronie %d", category, page)
+            break
+        batch = [x for x in parse(r.text) if x["name"] not in seen]
+        if not batch:
+            break
+        seen.update(x["name"] for x in batch)
+        rows += batch
+        if f"page={page + 1}" not in r.text:
+            break
+        time.sleep(delay_s)
+    return rows
+
+
 def import_knf(max_pages: int = 60, delay_s: float = 0.6, fetcher: Fetcher | None = None) -> dict[str, int]:
     fetcher = fetcher or Fetcher(delay_s=delay_s)
     brands = load_brands()
     counts: dict[str, int] = {}
     for path, category in SOURCES.items():
-        rows: list[dict] = []
-        seen: set[str] = set()
-        for page in range(1, max_pages + 1):
-            url = BASE + path + (f"?page={page}" if page > 1 else "")
-            r = _get_page(fetcher, url)
-            if r is None or r.status_code != 200:   # zapisujemy to, co udało się pobrać (upsert nie usuwa starych wpisów)
-                log.warning("KNF %s: import przerwany na stronie %d", category, page)
-                break
-            batch = [x for x in parse_page(r.text, category) if x["name"] not in seen]
-            if not batch:
-                break
-            seen.update(x["name"] for x in batch)
-            rows += batch
-            if f"page={page + 1}" not in r.text:
-                break
-            time.sleep(delay_s)
+        rows = _import_list(fetcher, path, category, lambda html, c=category: parse_page(html, c), max_pages, delay_s)
         counts[category] = upsert(apply_brands(rows, brands), f"knf:{path}") if rows else 0
         log.info("KNF %s: %d podmiotów", category, counts[category])
+    agents: list[dict] = []
+    for path in AGENT_SOURCES:
+        agents += _import_list(fetcher, path, AGENT_CATEGORY, parse_agents, max_pages, delay_s)
+    counts[AGENT_CATEGORY] = upsert(agents, "knf:agenci") if agents else 0
+    log.info("KNF agenci: %d", counts[AGENT_CATEGORY])
     return counts

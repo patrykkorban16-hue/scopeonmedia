@@ -3,6 +3,7 @@
 Kategorie zgodne z załącznikiem do Tematu 1/2 (definicja firmy inwestycyjnej) i rejestrami KNF:
   dom_maklerski · bank_maklerski · oddzial_zagranicznej_firmy · zagraniczna_firma_transgraniczna
   ostrzezenie_knf (Lista ostrzeżeń publicznych KNF – podmiot BEZ zezwolenia)
+  agent_firmy_inwestycyjnej (rejestr agentów KNF – działa w imieniu firmy, wyłączony z M3)
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 
 INVESTMENT_FIRM_CATEGORIES = {"dom_maklerski", "bank_maklerski", "oddzial_zagranicznej_firmy",
                               "zagraniczna_firma_transgraniczna"}
+AGENT_CATEGORY = "agent_firmy_inwestycyjnej"
 GENERIC = {"dom", "maklerski", "maklerskie", "biuro", "bank", "polska", "polski", "spolka", "akcyjna", "investment",
            "investments", "capital", "invest", "securities", "management", "asset", "assets", "markets", "market",
            "trade", "trading", "finance", "financial", "group", "global", "europe", "oddzial", "limited", "inwestycyjny",
@@ -43,6 +45,11 @@ class Entity:
     @property
     def is_investment_firm(self) -> bool:
         return self.authorized and self.category in INVESTMENT_FIRM_CATEGORIES
+
+    @property
+    def is_registered_agent(self) -> bool:
+        """Agent firmy inwestycyjnej z rejestru KNF – działa legalnie w imieniu firmy, więc nie jest „shadow advisory”."""
+        return self.authorized and self.category == AGENT_CATEGORY
 
 
 @dataclass
