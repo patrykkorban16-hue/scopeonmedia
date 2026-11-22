@@ -32,13 +32,14 @@ function M1Report({ data, onOpen }) {
       </div>
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Podmiot reklamujący</th><th>Platforma</th><th>Reklama (URL)</th><th>Ryzyko</th><th>Oznaczona</th><th>Afiliacja</th><th>Wykryto / ost. widziana</th></tr></thead>
+          <thead><tr><th>Podmiot reklamujący</th><th>Platforma</th><th>Reklama (URL)</th><th>Treść reklamy</th><th>Ryzyko</th><th>Oznaczona</th><th>Afiliacja</th><th>Wykryto / ost. widziana</th></tr></thead>
           <tbody>
             {g.advertisers.flatMap((a) => a.ads.map((ad, i) => (
               <tr key={ad.finding_id} onClick={() => onOpen(ad.finding_id)}>
                 <td>{i === 0 ? (safeHref(a.url) ? <a href={safeHref(a.url)} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}>{a.name}</a> : a.name) : ""}</td>
                 <td>{SOURCES[a.platform] || a.platform}</td>
                 <td className="url small">{ad.url}</td>
+                <td className="small"><div className="excerpt" title={ad.content}>{ad.content || "—"}</div></td>
                 <td><RiskBadge level={ad.risk_level} score={ad.score} /></td>
                 <td>{ad.labeled ? "tak" : <span className="tag warn">nie</span>}</td>
                 <td>{ad.affiliate ? "link afiliacyjny" : "—"}</td>
