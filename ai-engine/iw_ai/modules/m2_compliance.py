@@ -46,6 +46,10 @@ CLAIMS_RX = re.compile(r"\bbez (zadnego )?ryzyka\b|zero ryzyka|wolne od ryzyka|r
 RISK_RX = re.compile(r"ryzyk\w*|utrat\w*|\bstrat\w*|nie (gwarantuj|stanowi\w* gwarancj|sa gwarancj|jest gwarantowan)\w*|"
                      r"moze (spasc|zmalec|ulec obnizeniu|stracic)|mozesz stracic|wartosc \w+( \w+)? moze|"
                      r"(capital|money) (is )?at risk|you (may|can) lose|risk of loss|verlustrisiko", re.I)
+# „ryzyko” bez ostrzeżenia: zarządzanie ryzykiem, profil ryzyka, zapewnienia o niskim ryzyku – to nie informacja o ryzyku (R3)
+NOT_WARNING_RX = re.compile(r"zarzadz\w* ryzyk\w*|kontrol\w* ryzyk\w*|profil\w* ryzyk\w*|ankiet\w* ryzyk\w*|"
+                            r"(nisk|minimaln|ograniczon|zredukowan|zminimalizowan)\w* (poziom\w* )?ryzyk\w*|"
+                            r"ryzyk\w* (jest )?(nisk|minimaln|ograniczon)\w*", re.I)
 PROFIT_RX = re.compile(r"zysk\w*|zarob\w*|zarabia\w*|zwrot\w*|stop\w* zwrotu|rentown\w*|dochod\w*|oprocentowan\w*|"
                        r"\d+(,\d+)? ?% (rocznie|w skali roku|zysku|zwrotu|w (miesiac|rok|tydzien))|pomnoz\w*|"
                        r"\+ ?\d+(,\d+)? ?%|wzrost\w* (wartosci|o \d)", re.I)
@@ -73,7 +77,13 @@ PAST_DISCLAIMER_RX = re.compile(r"(historyczn|przeszl|osiagniet|dotychczasow)\w*
 SHORT_PERIOD_RX = re.compile(r"w (ostatni\w* |ciagu )?(miesiac|tydzien|tygodni|kwartal|\d+ (miesiac|tygodn|dni))\w*|"
                              r"w (jeden |1 )?(miesiac|tydzien)|od poczatku roku|\bytd\b|w \d+ (miesiac|dni)\w*", re.I)
 FIVE_YEARS_RX = re.compile(r"(5|piec|pieciu) (lat|letni)|ostatnich (5|pieciu)|od (poczatku dzialalnosci|utworzenia|startu funduszu)", re.I)
-FEES_RX = re.compile(r"oplat\w*|prowizj\w*|koszt\w*|obciazen\w*", re.I)
+# R12b wymaga wskazania WPŁYWU prowizji i opłat na wyniki – sama wzmianka („0 zł prowizji”) nie wystarcza
+FEES_IMPACT_RX = re.compile(r"(uwzgledni|odlicz|potrac|pomniejsz|obniz|wplyw\w* na)\w*[^.\n]{0,60}(oplat|prowizj|koszt|obciazen)|"
+                            r"(oplat|prowizj|koszt|obciazen)\w*[^.\n]{0,60}(obniza|pomniejsza|wplywa|wplyw\w* na wynik|"
+                            r"nie zostal\w* uwzgledn|zostal\w* uwzgledn|uwzgledn)|wynik\w* (netto|brutto)", re.I)
+# R11: źródło / założenia porównania – obok porównania albo w przypisie, do którego porównanie odsyła gwiazdką
+SOURCE_WINDOW = 300
+FOOTNOTE_SOURCE_RX = re.compile(r"(^|\s)(\*+|¹|\(1\))\s*(zrodl|wedlug|dane |na podstawie|stan na|przy zalozeni|zalozeni)", re.I)
 FX_RX = re.compile(r"\b(usd|eur|chf|gbp|dolar\w*|euro|frank\w*|funt\w*)\b|walut\w* obc", re.I)
 FX_WARN_RX = re.compile(r"kurs\w* walut|ryzyk\w* walutow|zmian\w* kurs", re.I)
 FORECAST_RX = re.compile(r"prognoz\w*|przewidujemy|spodziewan\w* (zysk|zwrot|stop|wynik)\w*|oczekiwan\w* (zysk|zwrot|stop|wynik)\w*|"
@@ -111,13 +121,22 @@ def _r(rid: str, status: str, weight: float = 0.0, evidence: str | None = None) 
                       evidence=(evidence or None) and evidence[:400], basis=basis)
 
 
+def _is_risk_warning(folded: str) -> bool:
+    """Ostrzeżenie o ryzyku – bez obietnic („bez ryzyka”) i bez zwrotów typu „zarządzanie ryzykiem”, „niskie ryzyko”."""
+    return bool(RISK_RX.search(NOT_WARNING_RX.sub(" ", CLAIMS_RX.sub(" ", folded))))
+
+
 def _risk_blocks(blocks: list[Block]) -> list[Block]:
-    out = []
-    for b in blocks:
-        f = CLAIMS_RX.sub(" ", fold(b.text))     # „bez ryzyka” to obietnica, nie ostrzeżenie
-        if RISK_RX.search(f):
-            out.append(b)
-    return out
+    return [b for b in blocks if _is_risk_warning(fold(b.text))]
+
+
+def _comparison_sourced(F: str, cm: re.Match) -> bool:
+    """Źródło lub założenia przy porównaniu (±300 znaków) albo w przypisie, gdy porównanie kończy się gwiazdką."""
+    window = F[max(0, cm.start() - SOURCE_WINDOW): cm.end() + SOURCE_WINDOW]
+    if SOURCE_RX.search(window):
+        return True
+    tail = F[cm.end(): cm.end() + 40]
+    return bool(re.search(r"\*|¹|\(1\)", tail)) and bool(FOOTNOTE_SOURCE_RX.search(F))
 
 
 def evaluate_rules(ctx: Ctx) -> tuple[list[RuleResult], dict]:
@@ -128,7 +147,7 @@ def evaluate_rules(ctx: Ctx) -> tuple[list[RuleResult], dict]:
     body_px = predominant_font(blocks)
     risk = _risk_blocks(blocks)
     risk_vis = [b for b in risk if _vis(b)]
-    profit = [b for b in blocks if _vis(b) and PROFIT_RX.search(fold(b.text)) and not RISK_RX.search(fold(b.text))]
+    profit = [b for b in blocks if _vis(b) and PROFIT_RX.search(fold(b.text)) and not _is_risk_warning(fold(b.text))]
     best_risk = max(risk_vis, key=_prom) if risk_vis else (max(risk, key=_prom) if risk else None)
     past_blocks = [b for b in blocks if PAST_RX.search(fold(b.text))]
     past_any = bool(past_blocks) or bool(PAST_RX.search(F))
@@ -278,7 +297,7 @@ def evaluate_rules(ctx: Ctx) -> tuple[list[RuleResult], dict]:
     cm = COMPARE_RX.search(F)
     if not cm:
         rules.append(_r("11", "na"))
-    elif SOURCE_RX.search(F):
+    elif _comparison_sourced(F, cm):
         rules.append(_r("11", "pass", evidence=f"porównanie „{q(cm)}” – podano źródło/założenia"))
     else:
         rules.append(_r("11", "fail", 1.3, f"porównanie bez źródła i założeń: „{q(cm)}”"))
@@ -302,8 +321,8 @@ def evaluate_rules(ctx: Ctx) -> tuple[list[RuleResult], dict]:
         heavy = [x for x in missing if not x.startswith("brak źródła")]
         rules.append(_r("12a", "fail" if heavy else ("warn" if missing else "pass"), 1.2, "; ".join(missing) or None))
         m12b = []
-        if not FEES_RX.search(F):
-            m12b.append("brak informacji o wpływie opłat i prowizji")
+        if not FEES_IMPACT_RX.search(F):
+            m12b.append("brak informacji o wpływie opłat i prowizji na wyniki")
         if FX_RX.search(F) and not FX_WARN_RX.search(F):
             m12b.append("waluta obca bez ostrzeżenia o wpływie kursów walut")
         rules.append(_r("12b", "fail" if m12b else "pass", 0.9, "; ".join(m12b) or None))
@@ -349,7 +368,7 @@ def evaluate_rules(ctx: Ctx) -> tuple[list[RuleResult], dict]:
     for sentence in re.split(r"(?<=[.!?])\s+|\n", F):     # odwołanie do nadzoru i „bezpieczeństwo” w jednym zdaniu
         start = F.find(sentence, pos)
         pos = max(pos, start + len(sentence))
-        if KNF_RX.search(sentence) and SAFETY_RX.search(sentence) and not RISK_RX.search(CLAIMS_RX.sub(" ", sentence)):
+        if KNF_RX.search(sentence) and SAFETY_RX.search(sentence) and not _is_risk_warning(sentence):
             hit = ctx.quote(start, start + len(sentence))
             break
     rules.append(_r("18", "fail", 2.2, f"„{hit}”") if hit else _r("18", "pass" if KNF_RX.search(F) else "na"))
