@@ -85,6 +85,36 @@ def test_m2_rule10_risk_warning_in_other_language():
     assert pre.language == "pl" and r["10"] == "fail" and r["14"] == "fail"
 
 
+def test_m2_rule3_risk_management_is_not_a_risk_warning():
+    # „zarządzanie ryzykiem” i „niskie ryzyko” to nie informacja o ryzyku inwestycyjnym
+    html = ("<body><p>Materiał marketingowy Vistula Dom Maklerski S.A.</p><h1>Zarabiaj nawet 12% rocznie</h1>"
+            "<p>Profesjonalne zarządzanie ryzykiem i niskie ryzyko portfela.</p></body>")
+    f, _ = run("https://vistula-dm.test/zysk", html)
+    assert rules_of(f[2])["3"] == "fail"
+    assert "bez informacji o ryzyku" in next(r.evidence for r in f[2].rules if r.id == "3")
+
+
+def test_m2_rule11_source_must_belong_to_comparison():
+    far = " ".join(["Oferta obejmuje akcje z GPW i rynków zagranicznych."] * 12)
+    unsourced = (f"<body><p>Materiał marketingowy Vistula Dom Maklerski S.A.</p><p>Najniższe prowizje na rynku.</p><p>{far}</p>"
+                 "<p>Źródło: tabela opłat Vistula DM.</p><p>Inwestowanie wiąże się z ryzykiem utraty kapitału.</p></body>")
+    footnote = ("<body><p>Materiał marketingowy Vistula Dom Maklerski S.A.</p><p>Najniższe prowizje na rynku*.</p>"
+                f"<p>{far}</p><p>* Źródło: porównanie tabel opłat 5 brokerów, stan na 1.11.2026.</p>"
+                "<p>Inwestowanie wiąże się z ryzykiem utraty kapitału.</p></body>")
+    f1, _ = run("https://vistula-dm.test/prowizje", unsourced)
+    f2, _ = run("https://vistula-dm.test/prowizje-2", footnote)
+    assert rules_of(f1[2])["11"] == "fail" and rules_of(f2[2])["11"] == "pass"
+
+
+def test_m2_rule12b_requires_fee_impact_not_fee_mention():
+    base = ("<body><p>Materiał marketingowy Vistula Dom Maklerski S.A.</p>"
+            "<p>Stopy zwrotu: 2021: +8%, 2022: -12%, 2023: +15%, 2024: +9%, 2025: +11%. Źródło: obliczenia własne.</p>"
+            "<p>Wyniki historyczne nie są wiarygodnym wskaźnikiem przyszłych wyników. Inwestowanie wiąże się z ryzykiem.</p>")
+    f1, _ = run("https://vistula-dm.test/wyniki", base + "<p>Teraz 0 zł prowizji na start!</p></body>")
+    f2, _ = run("https://vistula-dm.test/wyniki-2", base + "<p>Wyniki po uwzględnieniu opłat za zarządzanie.</p></body>")
+    assert rules_of(f1[2])["12b"] == "fail" and rules_of(f2[2])["12b"] == "pass"
+
+
 # ------------------------------------------------------------------ moduł 1 i 3
 def test_m1_affiliate_ad_by_third_party():
     html = ("<body><p>Polecam Vistula Trade! Załóż konto z mojego linku i zgarnij bonus: "
