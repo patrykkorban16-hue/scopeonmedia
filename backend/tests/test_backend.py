@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from iw_backend.db import high_cut, risk_level
 from iw_backend.registry import derive_aliases
-from iw_backend.registry.knf import parse_page
+from iw_backend.registry.knf import BRANDS_FILE, apply_brands, parse_page
 from iw_backend.scraper.extract import extract_html, extract_social_item, platform_of
 
 KNF_SAMPLE = """
@@ -24,6 +24,18 @@ def test_knf_register_parser():
     assert rows[0]["former_names"] == ["EFIX DOM MAKLERSKI S.A."]
     assert "Warszawa" in rows[0]["address"] and rows[0]["license_date"] == "08-02-2011"
     assert rows[1]["aliases"] == ["Biuro Maklerskie ALIOR Bank"]
+
+
+def test_knf_brands_add_aliases_and_domains():
+    rows = apply_brands([{"name": "XTB S.A.", "aliases": []},
+                         {"name": "ALIOR BANK S.A.", "aliases": ["Biuro Maklerskie ALIOR Bank"]},
+                         {"name": "NIEZNANA FIRMA S.A.", "aliases": []}])
+    assert "XTB" in rows[0]["aliases"] and "xtb.com" in rows[0]["domains"]
+    assert rows[1]["aliases"][0] == "Biuro Maklerskie ALIOR Bank" and "aliorbank.pl" in rows[1]["domains"]
+    assert "domains" not in rows[2]
+    # każda nazwa w brands.json występuje tylko raz (inaczej marka trafiłaby do złej firmy)
+    names = [n.casefold() for b in json.loads(BRANDS_FILE.read_text(encoding="utf-8"))["brands"] for n in b["register_names"]]
+    assert len(names) == len(set(names))
 
 
 def test_derive_aliases_strips_legal_form():

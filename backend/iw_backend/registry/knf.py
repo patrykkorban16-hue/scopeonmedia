@@ -2,12 +2,15 @@
 
 Każdy podmiot na stronie KNF to osobna tabela <th>pole</th><td>wartość</td>; listy są stronicowane (?page=N).
 Poprzednie nazwy podmiotu są przekreślone (<strike>) – zapisujemy je jako former_names.
+Rejestr nie podaje marek ani domen, więc uzupełnia je brands.json (XTB, eToro, mBank… → nazwa rejestrowa).
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 
@@ -15,7 +18,9 @@ from ..scraper.http import Fetcher
 from . import upsert
 
 log = logging.getLogger(__name__)
-BASE = "https://www.knf.gov.pl/podmioty/Podmioty_rynku_kapitalowego/Firmy_inwestycyjne_i_Agenci_firm_inwestycyjnych/"
+BRANDS_FILE = Path(__file__).parent / "brands.json"
+PAGE_ATTEMPTS = 4          # serwer KNF potrafi zerwać połączenie bez odpowiedzi – ponawiamy z rosnącą przerwą
+BASE ="https://www.knf.gov.pl/podmioty/Podmioty_rynku_kapitalowego/Firmy_inwestycyjne_i_Agenci_firm_inwestycyjnych/"
 SOURCES = {
     "domy_maklerskie": "dom_maklerski",
     "Banki_prowadzace_dzialalnosc_maklerska": "bank_maklerski",
@@ -62,16 +67,46 @@ def parse_page(html: str, category: str) -> list[dict]:
     return out
 
 
+def load_brands() -> dict[str, dict]:
+    """Nazwa rejestrowa (casefold) → {aliases, domains, social_handles} z brands.json."""
+    data = json.loads(BRANDS_FILE.read_text(encoding="utf-8"))
+    return {n.casefold(): b for b in data["brands"] for n in b["register_names"]}
+
+
+def apply_brands(rows: list[dict], brands: dict[str, dict] | None = None) -> list[dict]:
+    """Dopisuje marki i domeny do podmiotów z rejestru (bez duplikatów, z zachowaniem aliasów z KNF)."""
+    brands = load_brands() if brands is None else brands
+    for r in rows:
+        b = brands.get(r["name"].casefold())
+        if not b:
+            continue
+        for key in ("aliases", "domains", "social_handles"):
+            r[key] = list(dict.fromkeys([*r.get(key, []), *b.get(key, [])]))
+    return rows
+
+
+def _get_page(fetcher: Fetcher, url: str):
+    for attempt in range(PAGE_ATTEMPTS):
+        try:
+            return fetcher.get(url)
+        except Exception as exc:
+            log.warning("KNF %s – próba %d/%d nieudana: %s", url, attempt + 1, PAGE_ATTEMPTS, exc)
+            time.sleep(2 + 3 * attempt)
+    return None
+
+
 def import_knf(max_pages: int = 60, delay_s: float = 0.6, fetcher: Fetcher | None = None) -> dict[str, int]:
     fetcher = fetcher or Fetcher(delay_s=delay_s)
+    brands = load_brands()
     counts: dict[str, int] = {}
     for path, category in SOURCES.items():
         rows: list[dict] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
             url = BASE + path + (f"?page={page}" if page > 1 else "")
-            r = fetcher.get(url)
-            if r.status_code != 200:
+            r = _get_page(fetcher, url)
+            if r is None or r.status_code != 200:   # zapisujemy to, co udało się pobrać (upsert nie usuwa starych wpisów)
+                log.warning("KNF %s: import przerwany na stronie %d", category, page)
                 break
             batch = [x for x in parse_page(r.text, category) if x["name"] not in seen]
             if not batch:
@@ -81,6 +116,6 @@ def import_knf(max_pages: int = 60, delay_s: float = 0.6, fetcher: Fetcher | Non
             if f"page={page + 1}" not in r.text:
                 break
             time.sleep(delay_s)
-        counts[category] = upsert(rows, f"knf:{path}") if rows else 0
+        counts[category] = upsert(apply_brands(rows, brands), f"knf:{path}") if rows else 0
         log.info("KNF %s: %d podmiotów", category, counts[category])
     return counts
