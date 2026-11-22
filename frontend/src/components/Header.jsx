@@ -13,6 +13,16 @@ function Indicator({ state, label, value, title }) {
 
 const st = (ok) => (ok === true ? "ok" : ok === false ? "bad" : "off");
 
+// litera „o” w „Scope” jako celownik: pierścień w kolorze tekstu, krzyż w kolorze akcentu
+function ScopeO() {
+  return (
+    <svg className="wm-o" viewBox="0 0 24 24" overflow="visible" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="9.35" fill="none" stroke="currentColor" strokeWidth="5.3" />
+      <path d="M12 -3.5V27.5M-2.5 12H26.5" stroke="var(--accent)" strokeWidth="2.2" />
+    </svg>
+  );
+}
+
 export default function Header({ connected, health, lastJob, filters, onRun }) {
   const [busy, setBusy] = useState(false);
   const ai = health?.ai_engine;
@@ -30,7 +40,9 @@ export default function Header({ connected, health, lastJob, filters, onRun }) {
       <div className="brand">
         <span className="mark" aria-hidden />
         <div>
-          <div className="wordmark">ScopeOnMedia</div>
+          <div className="wordmark" role="img" aria-label="ScopeOnMedia">
+            <span aria-hidden="true">Sc<ScopeO />peOnMedia</span>
+          </div>
           <div className="kicker">monitoring promocji instrumentów finansowych</div>
         </div>
       </div>

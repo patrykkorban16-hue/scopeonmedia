@@ -445,6 +445,19 @@ def screenshot(doc_id: int, viewport: str):
     return Response(data, media_type="image/png", headers={"Cache-Control": "max-age=3600"})
 
 
+@app.get("/api/findings/{fid}/evidence")
+def evidence_package(fid: int):
+    """Teczka dowodowa: ZIP z raportem PDF/HTML, zrzutami, źródłem, danymi JSON i sumami SHA-256."""
+    from .evidence import build_package
+
+    pkg = build_package(fid)
+    if pkg is None:
+        raise HTTPException(404)
+    data, filename = pkg
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
+
+
 # ------------------------------------------------------------------------------ zadania i rejestr
 class JobBody(BaseModel):
     kind: str = "all"           # all | web | urls | social | search | recheck | reanalyze | registry

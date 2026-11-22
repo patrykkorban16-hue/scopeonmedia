@@ -59,6 +59,7 @@ export const api = {
   registry: (q, category) => req(`/api/registry?${qs({ q, category, limit: 300 })}`),
   health: () => req(`/api/health`),
   screenshotUrl: (docId, vp) => `${BASE}/api/documents/${docId}/screenshot/${vp}`,
+  evidenceUrl: (id) => `${BASE}/api/findings/${id}/evidence`,
   exportUrl: (f, fmt) => `${BASE}/api/export?${qs({ module: f.modules, risk: f.risks, status: f.statuses, fmt })}`,
 };
 

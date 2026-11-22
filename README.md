@@ -9,6 +9,9 @@ Silnik scrapingu (WWW + Facebook/Instagram/TikTok/YouTube) i trzy moduły analit
 | M2 Zgodność i ryzyko | materiały firm inwestycyjnych vs 18 kryteriów z załącznika (art. 44 rozp. 2017/565) | status każdej reguły + flaga |
 | M3 Shadow advisory | doradztwo inwestycyjne bez zezwolenia (art. 76 u.o.i.f.) | dane podmiotu, treść oferty, URL |
 
+Każdy incydent można pobrać jako **teczkę dowodową** (ZIP: raport PDF, zrzuty ekranu z chwili pobrania, źródło strony,
+sumy SHA-256) – przycisk w szczegółach incydentu.
+
 Dane demonstracyjne (`backend/iw_backend/demo`) opisują **fikcyjne** podmioty na domenach `*.test`. Prawdziwy Rejestr Firm Inwestycyjnych KNF importuje przycisk w zakładce „Źródła” albo `python -m iw_backend.cli registry-knf`.
 
 ## Quick Start

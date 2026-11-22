@@ -120,7 +120,11 @@ export default function FindingDrawer({ id, version, onClose, onStatusChange, on
                 <div className="muted small">{MODULES[f.module].short} · {f.module_name}</div>
                 <h2>{humanize(f.category)}</h2>
               </div>
-              <button className="btn ghost" onClick={onClose} aria-label="Zamknij">✕</button>
+              <div className="row-gap drawer-actions">
+                <a className="btn" href={api.evidenceUrl(f.id)} download
+                   title="ZIP: raport PDF, zrzuty ekranu, źródło strony i sumy SHA-256">Teczka dowodowa ↓</a>
+                <button className="btn ghost" onClick={onClose} aria-label="Zamknij">✕</button>
+              </div>
             </div>
             <div className="drawer-scores">
               <RiskBadge level={f.risk_level} score={f.score} />

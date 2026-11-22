@@ -138,3 +138,55 @@ def test_worker_restart_closes_interrupted_jobs():
     with session_scope() as s:
         assert s.get(CrawlJob, old_id).status == "failed" and s.get(CrawlJob, old_id).finished_at
         assert s.get(CrawlJob, new_id).status == "running"      # zadanie bieżącego workera zostaje
+
+
+def test_evidence_package_zip_hashes_and_escaping(monkeypatch):
+    import hashlib
+    import io
+    import zipfile
+
+    from iw_backend import evidence
+    from iw_backend.api import app
+    from iw_backend.db import Content, Document, Finding, session_scope, utcnow
+    from iw_backend.storage import put_content_addressed
+
+    monkeypatch.setattr(evidence, "_html_to_pdf", lambda html: b"%PDF-1.7 test")   # Chromium nie jest wymagany w CI
+    png = b"\x89PNG\r\n\x1a\n" + b"zrzut-testowy"
+    with session_scope() as s:
+        d = Document(url="https://firma.test/promo", fetched_url="https://firma.test/promo", domain="firma.test",
+                     source_type="web", content_hash="h" * 64, title="Promo",
+                     raw_key=put_content_addressed(b"<html>oryginal</html>", "raw", "html", "text/html"),
+                     screenshots={"desktop": put_content_addressed(png, "screenshots", "png", "image/png")})
+        d.content = Content(text="Gwarantowany zysk 20%")
+        s.add(d)
+        s.flush()
+        f = Finding(document_id=d.id, module=2, category="test", score=0.9, rule_score=0.9, excerpt="zysk",
+                    event_date=utcnow(), reasons=[{"label": "zysk", "evidence": "<script>alert(1)</script> {N}", "weight": 1}],
+                    rules=[{"id": "3", "name": "Ryzyko", "status": "fail", "evidence": "brak", "basis": "art. 44"}])
+        s.add(f)
+        s.flush()
+        fid = f.id
+    with TestClient(app) as c:
+        assert c.get("/api/findings/999999/evidence").status_code == 404
+        r = c.get(f"/api/findings/{fid}/evidence")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    root = z.namelist()[0].split("/")[0]
+    names = {n.split("/", 1)[1] for n in z.namelist()}
+    assert {"raport.pdf", "raport.html", "dane.json", "tekst.txt", "zrodlo.html", "zrzuty/desktop.png", "SHA256SUMS"} <= names
+    sums = z.read(f"{root}/SHA256SUMS").decode().splitlines()
+    assert len(sums) == len(names) - 1
+    for line in sums:                                    # każdy plik zgadza się ze swoją sumą
+        digest, path = line.split("  ", 1)
+        assert hashlib.sha256(z.read(f"{root}/{path}")).hexdigest() == digest
+    report = z.read(f"{root}/raport.html").decode()
+    assert "<script>" not in report and "&lt;script&gt;" in report      # treść ze strony jest tylko tekstem
+    assert "zgodny z zapisem z chwili pobrania" in report and "{N}" in report   # treść nie jest modyfikowana
+    assert z.read(f"{root}/zrzuty/desktop.png") == png
+
+
+def test_evidence_pdf_never_raises():
+    from iw_backend.evidence import _html_to_pdf
+
+    pdf = _html_to_pdf("<html><body>test</body></html>")
+    assert pdf is None or pdf.startswith(b"%PDF")       # bez Chromium: None, teczka ma wtedy sam raport HTML

@@ -82,6 +82,8 @@ telefon, adres.
 - `POST /v1/preprocess {url, source_type, html?, text?, render?}` → `{text, blocks[], tokens, simhash, language, embedding, style_source}`
 - `POST /v1/analyze {document, pre, registry_version}` → `{findings: UnifiedFinding[], max_score}`
 - `UnifiedFinding = {module, category, score, rule_score, firm, advertiser, entity, excerpt, reasons[], rules[], details}`
+- `GET /api/findings/{id}/evidence` → teczka dowodowa (ZIP): raport PDF/HTML, zrzuty ekranu, surowe źródło, `dane.json`,
+  `SHA256SUMS`; zrzuty i źródło są w storage pod kluczem = SHA-256 z chwili pobrania, więc raport potwierdza ich niezmienność
 - Zdarzenia Socket.IO: `alert`, `finding_updated`, `thresholds`, `job`, `registry`
 
 ## Bezpieczeństwo
