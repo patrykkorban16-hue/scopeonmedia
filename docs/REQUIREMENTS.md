@@ -4,7 +4,7 @@ Status: **✔ zweryfikowane** = uruchomione i sprawdzone lokalnie (testy, przegl
 
 | Wymaganie | Implementacja | Status |
 |---|---|---|
-| Kolejka zadań open source | Huey (`backend/iw_backend/tasks.py`), priorytety, retry | ✔ (SQLite) · ◐ (Redis w Dockerze) |
+| Kolejka zadań open source | Huey (`backend/iw_backend/tasks.py`), priorytety, retry | ✔ (SQLite lokalnie, Redis w Dockerze) |
 | Playwright / httpx | `scraper/http.py`, `scraper/render.py` | ✔ |
 | Kolektory social media, rotacja UA i proxy | `scraper/collectors.py`, `scraper/http.py` (`IW_PROXIES`) | ✔ mock + parser stron (og:*, JSON-LD) · ◐ prawdziwe tokeny API |
 | HTML → JSON | `scraper/extract.py` | ✔ |
@@ -26,7 +26,7 @@ Status: **✔ zweryfikowane** = uruchomione i sprawdzone lokalnie (testy, przegl
 | M3: dane podmiotu, treść, URL; definicja art. 76 | `m3_shadow.py`, `entity_extract.py`, `/api/reports/m3` | ✔ |
 | Definicja firmy inwestycyjnej (zał. 1/2) | kategorie rejestru + importer stron KNF (`registry/knf.py`) | ✔ import na żywo 21.11.2026: 760 podmiotów (28 DM, 10 banków, 10 oddziałów, 712 transgranicznych) |
 | Separacja frontend / backend / AI | 3 katalogi, 3 obrazy, komunikacja HTTP | ✔ |
-| Docker Compose – start jedną komendą | `docker-compose.yml` (healthchecki, pobieranie modeli, bootstrap) | ◐ `docker compose config` poprawny; brak WSL2 na maszynie deweloperskiej |
+| Docker Compose – start jedną komendą | `docker-compose.yml` (healthchecki, pobieranie brakujących modeli, bootstrap, `restart: unless-stopped`) | ✔ `docker compose up -d --build` na Windows 11 + Docker Desktop: 10 kontenerów, skan demo 44 materiały, te same wyniki co lokalnie |
 | Tylko darmowe modele i otwarte bazy | Gemma 4 i Qwen3-Embedding (oba Apache 2.0), PostgreSQL, Redis, SeaweedFS | ✔ |
 | Skan zależności | `requirements.lock` z hashami (`--require-hashes`), `scripts/security-scan.ps1` (pip-audit pełnych lockfile'ów, npm audit), GitHub Actions co push i co tydzień, Dependabot z 14-dniowym opóźnieniem | ✔ 0 podatności lokalnie · ◐ CI jeszcze nie uruchomione na GitHubie |
 | Sekrety w .env | `.env` poza repozytorium, losowe sekrety ze `start-local.ps1`, serwisy nie startują bez `IW_INTERNAL_TOKEN` lub z wartością przykładową | ✔ |

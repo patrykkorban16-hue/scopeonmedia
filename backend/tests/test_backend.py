@@ -120,3 +120,21 @@ def test_foreign_page_cannot_hijack_url_or_labels():
     sub = extract_html('<html><head><link rel="canonical" href="https://www.youtube.com/watch?v=1"></head><body>x</body></html>',
                        "https://m.youtube.com/watch?v=1")
     assert sub["url"] == "https://www.youtube.com/watch?v=1"   # ta sama witryna – przyjęty
+
+
+def test_worker_restart_closes_interrupted_jobs():
+    from datetime import timedelta
+
+    from iw_backend import tasks
+    from iw_backend.db import CrawlJob, session_scope
+
+    with session_scope() as s:
+        old = CrawlJob(kind="web", target="x", status="running", started_at=tasks._STARTED_AT - timedelta(hours=1))
+        new = CrawlJob(kind="web", target="y", status="running", started_at=tasks._STARTED_AT + timedelta(seconds=1))
+        s.add_all([old, new])
+        s.flush()
+        old_id, new_id = old.id, new.id
+    assert tasks._close_interrupted_jobs() >= 1
+    with session_scope() as s:
+        assert s.get(CrawlJob, old_id).status == "failed" and s.get(CrawlJob, old_id).finished_at
+        assert s.get(CrawlJob, new_id).status == "running"      # zadanie bieżącego workera zostaje

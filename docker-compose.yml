@@ -17,7 +17,8 @@ x-backend-env: &backend-env
 
 services:
   postgres:
-    image: postgres:17.7-alpine
+    image: postgres:17.7-alpine@sha256:bb377b7239d2774ac8cc76f481596ce96c5a6b5e9d141f6d0a0ee371a6e7c0f2
+    restart: unless-stopped
     environment:
       POSTGRES_DB: scopeonmedia
       POSTGRES_USER: scopeonmedia
@@ -29,7 +30,8 @@ services:
       retries: 20
 
   redis:
-    image: redis:7.4.7-alpine
+    image: redis:7.4.7-alpine@sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
     healthcheck:
@@ -38,7 +40,8 @@ services:
       retries: 20
 
   seaweedfs:   # Object Storage zgodny z S3 (Apache 2.0)
-    image: chrislusf/seaweedfs:4.52
+    image: chrislusf/seaweedfs:4.52@sha256:57877e32bb90073b37dc109b438ba66e84fd5ed9ced5f5c04f56444ef243ce59
+    restart: unless-stopped
     environment:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?ustaw w .env}
       S3_SECRET_KEY: ${S3_SECRET_KEY:?ustaw w .env}
@@ -51,7 +54,8 @@ services:
     volumes: [objects:/data]
 
   ollama:
-    image: ollama/ollama:0.40.16
+    image: ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
+    restart: unless-stopped
     # certs/: opcjonalne dodatkowe CA (sieć z inspekcją TLS – proxy firmowe, antywirus); pusty katalog = bez zmian
     volumes: [ollama:/root/.ollama, ./certs:/extra-ca:ro]
     environment:
@@ -63,19 +67,21 @@ services:
     # GPU NVIDIA (opcjonalnie):
     # deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
 
-  ollama-init:   # jednorazowe pobranie modeli open source (Gemma 4 + EmbeddingGemma)
-    image: ollama/ollama:0.40.16
+  ollama-init:   # jednorazowe pobranie modeli open source (Gemma 4 + Qwen3-Embedding, Apache 2.0)
+    image: ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
     environment:
       OLLAMA_HOST: http://ollama:11434
       IW_LLM_MODEL: ${IW_LLM_MODEL:-gemma4:e2b}
-      IW_EMBED_MODEL: ${IW_EMBED_MODEL:-embeddinggemma}
-    entrypoint: ["/bin/sh", "-c", "ollama pull \"$$IW_EMBED_MODEL\" && ollama pull \"$$IW_LLM_MODEL\""]
+      IW_EMBED_MODEL: ${IW_EMBED_MODEL:-qwen3-embedding:0.6b}
+    # pobiera tylko brakujące modele – ponowny start działa bez dostępu do internetu (instalacja on-premise / offline)
+    entrypoint: ["/bin/sh", "-c", "for m in \"$$IW_EMBED_MODEL\" \"$$IW_LLM_MODEL\"; do ollama show \"$$m\" >/dev/null 2>&1 || ollama pull \"$$m\" || exit 1; done"]
     depends_on:
       ollama: {condition: service_healthy}
     restart: "no"
 
   ai-engine:
     build: ./ai-engine
+    restart: unless-stopped
     env_file: .env
     environment:
       IW_OLLAMA_URL: http://ollama:11434
@@ -90,6 +96,7 @@ services:
 
   api:
     build: ./backend
+    restart: unless-stopped
     env_file: .env
     environment: *backend-env
     depends_on:
@@ -106,6 +113,7 @@ services:
 
   worker:   # kolejka zadań + harmonogram (CronJob) – Huey na Redis
     build: ./backend
+    restart: unless-stopped
     env_file: .env
     environment: *backend-env
     command: ["huey_consumer", "iw_backend.tasks.huey", "-w", "4", "-k", "thread"]
@@ -128,6 +136,7 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     ports: ["127.0.0.1:8080:80"]
     depends_on:
       api: {condition: service_healthy}

@@ -19,6 +19,21 @@ updates:
       default-days: 14
     open-pull-requests-limit: 5
 
+  # obrazy bazowe przypięte digestem (tag@sha256) – Dependabot aktualizuje tag i digest razem
+  - package-ecosystem: docker
+    directories: ["/backend", "/ai-engine", "/frontend"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

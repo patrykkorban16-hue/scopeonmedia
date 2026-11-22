@@ -296,6 +296,25 @@ def periodic_heartbeat():
     _heartbeat()
 
 
+_STARTED_AT = utcnow()
+
+
+def _close_interrupted_jobs() -> int:
+    """Zadania „running” sprzed startu tego workera przerwał restart (np. docker compose up) –
+    bez tego wisiałyby w dashboardzie jako trwające."""
+    with session_scope() as s:
+        stale = list(s.scalars(select(CrawlJob).where(CrawlJob.status == "running",
+                                                      CrawlJob.started_at < _STARTED_AT)))
+        for j in stale:
+            j.status, j.error, j.finished_at = "failed", "przerwane: restart workera", utcnow()
+        return len(stale)
+
+
 @huey.on_startup()
 def on_worker_start():
+    try:
+        if n := _close_interrupted_jobs():
+            log.info("zamknięto %d przerwanych zadań", n)
+    except Exception:   # start workera nie może zależeć od porządków w historii zadań
+        log.exception("nie udało się zamknąć przerwanych zadań")
     _heartbeat()

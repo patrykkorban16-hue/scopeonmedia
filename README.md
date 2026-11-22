@@ -23,6 +23,8 @@ docker compose up -d --build
 Dashboard: http://localhost:8080 · API: http://localhost:8000/docs (port zmienia `IW_API_PORT` w `.env`).
 Bez ustawionych sekretów (albo z wartościami przykładowymi) serwisy celowo nie startują.
 Pierwszy start pobiera modele Gemma 4 i Qwen3-Embedding (ok. 5 GB, `docker compose logs -f ollama-init`), a potem `bootstrap` zleca skan danych demo.
+Kolejne starty nie wymagają internetu. Gdy antywirus lub proxy skanuje połączenia szyfrowane (np. Kaspersky), pobieranie
+modeli kończy się błędem `x509: certificate signed by unknown authority` – wtedy wrzuć jego certyfikat główny (PEM) do `certs/`.
 
 ### Lokalnie na Windows (bez Dockera)
 
@@ -85,6 +87,7 @@ Zależności Pythona instaluje się z `requirements.lock` (wszystkie paczki z ha
 Po zmianie `requirements.txt` odśwież lockfile w katalogu serwisu:
 `uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 --no-header -o requirements.lock`.
 GitHub Actions (`.github/workflows/security.yml`) przy każdym pushu i co tydzień sprawdza zgodność lockfile'ów, audytuje
-zależności i uruchamia testy oraz build; Dependabot proponuje aktualizacje nie młodsze niż 14 dni.
+zależności i uruchamia testy oraz build; Dependabot proponuje aktualizacje (pip, npm, obrazy Docker przypięte digestem,
+Actions) nie młodsze niż 14 dni.
 
 Architektura, kontrakty i reguły: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · pokrycie wymagań: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) · proces z asystentem AI: [docs/AI_DEV_PROCESS.md](docs/AI_DEV_PROCESS.md).
